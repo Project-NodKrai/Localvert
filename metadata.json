@@ -1,0 +1,6 @@
+{
+  "name": "Localvert",
+  "description": "100% 클라이언트 사이드 변환(WebAssembly)을 지원하는 파일 변환 사이트입니다. 로컬 보안이 강화된 미디어 통합 변환을 제공합니다.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
