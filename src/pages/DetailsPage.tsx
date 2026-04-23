@@ -31,15 +31,15 @@ export default function DetailsPage() {
             왜 <span className="text-red-500">Localvert</span>인가요?
           </h1>
           <p className="text-xl text-neutral-400 mb-16 leading-relaxed">
-            Localvert는 단순히 파일을 변환하는 도구 그 이상입니다. 사용자의 데이터 주권을 존중하고, 
-            가장 안전한 방식으로 기술을 활용합니다.
+            Localvert는 단순히 파일을 변환하는 도구 그 이상입니다. 사용자의 데이터를 존중하고, 
+            100% 무료로 제한 없이 서비스를 제공해드립니다..
           </p>
         </motion.div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-20">
           <FeatureCard 
             icon={<Shield className="w-6 h-6 text-red-500" />}
-            title="100% 로컬 보안"
+            title="100% 로컬"
             description="모든 변환 과정은 당신의 브라우저 안에서만 일어납니다. 파일이 서버로 업로드되지 않아 절대적으로 안전합니다."
           />
           <FeatureCard 
@@ -54,8 +54,8 @@ export default function DetailsPage() {
           />
           <FeatureCard 
             icon={<Globe className="w-6 h-6 text-red-500" />}
-            title="범용 호환성"
-            description="FFmpeg 엔진을 브라우저에 이식하여 수백 가지의 미디어 포맷을 자유롭게 변환할 수 있습니다."
+            title="안정성"
+            description="신뢰도 있는 FFmpeg 엔진을 기반으로 구동되어 높은 안정성을 자랑합니다."
           />
         </div>
       </main>
