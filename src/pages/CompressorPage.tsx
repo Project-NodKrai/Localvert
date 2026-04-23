@@ -2,7 +2,6 @@ import { useState, useCallback, useEffect } from 'react';
 import Header from '../components/Header';
 import FileUploader from '../components/FileUploader';
 import FileList from '../components/FileList';
-import PreUploadSettings from '../components/PreUploadSettings';
 import { Task, CompressTask, FileType } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { compressImage, compressVideo } from '../lib/compressors';
@@ -18,12 +17,6 @@ function getFileType(file: File): FileType {
 
 export default function CompressorPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [defaultOptions, setDefaultOptions] = useState({
-    quality: 80,
-    resolution: 'original',
-    mute: false,
-    keepMetadata: false,
-  });
 
   useEffect(() => {
     clearStorage().catch(console.error);
@@ -40,11 +33,11 @@ export default function CompressorPage() {
         file,
         type,
         mode: 'compress',
-        quality: defaultOptions.quality,
+        quality: 80,
         settings: {
-          resolution: defaultOptions.resolution as any,
-          mute: defaultOptions.mute,
-          keepMetadata: defaultOptions.keepMetadata,
+          resolution: 'original',
+          mute: false,
+          keepMetadata: false,
         },
         status: 'storing',
         progress: 0,
@@ -138,14 +131,7 @@ export default function CompressorPage() {
         </div>
 
         {tasks.length === 0 ? (
-          <>
-            <PreUploadSettings 
-              mode="compress" 
-              settings={defaultOptions} 
-              onUpdate={(u) => setDefaultOptions(prev => ({ ...prev, ...u }))} 
-            />
-            <FileUploader onFilesAdded={handleFilesAdded} mode="compress" />
-          </>
+          <FileUploader onFilesAdded={handleFilesAdded} mode="compress" />
         ) : (
           <FileList
             tasks={tasks}

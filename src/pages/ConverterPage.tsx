@@ -2,7 +2,6 @@ import { useState, useCallback, useEffect } from 'react';
 import Header from '../components/Header';
 import FileUploader from '../components/FileUploader';
 import FileList from '../components/FileList';
-import PreUploadSettings from '../components/PreUploadSettings';
 import { Task, ConvertTask, FileType, FORMATS } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { processConversion } from '../lib/converters';
@@ -33,9 +32,6 @@ function getFileType(file: File): FileType {
 
 export default function ConverterPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [defaultOptions, setDefaultOptions] = useState({
-    targetFormat: 'mp4'
-  });
 
   useEffect(() => {
     clearStorage().catch(console.error);
@@ -54,16 +50,12 @@ export default function ConverterPage() {
         possibleFormats = FORMATS.unknown;
       }
       
-      const targetFormat = possibleFormats.includes(defaultOptions.targetFormat) 
-        ? defaultOptions.targetFormat 
-        : (possibleFormats[0] || '');
-
       return {
         id,
         file,
         type,
         mode: 'convert',
-        targetFormat,
+        targetFormat: possibleFormats[0] || '',
         status: 'storing',
         progress: 0,
         stored: false,
@@ -153,14 +145,7 @@ export default function ConverterPage() {
         </div>
 
         {tasks.length === 0 ? (
-          <>
-            <PreUploadSettings 
-              mode="convert" 
-              settings={defaultOptions} 
-              onUpdate={(u) => setDefaultOptions(prev => ({ ...prev, ...u }))} 
-            />
-            <FileUploader onFilesAdded={handleFilesAdded} mode="convert" />
-          </>
+          <FileUploader onFilesAdded={handleFilesAdded} mode="convert" />
         ) : (
           <FileList
             tasks={tasks}

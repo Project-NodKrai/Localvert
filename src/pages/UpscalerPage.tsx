@@ -2,7 +2,6 @@ import { useState, useCallback, useEffect } from 'react';
 import Header from '../components/Header';
 import FileUploader from '../components/FileUploader';
 import FileList from '../components/FileList';
-import PreUploadSettings from '../components/PreUploadSettings';
 import { Task, UpscaleTask, FileType } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { upscaleImage, upscaleVideo } from '../lib/upscalers';
@@ -17,10 +16,6 @@ function getFileType(file: File): FileType {
 
 export default function UpscalerPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [defaultOptions, setDefaultOptions] = useState({
-    model: 'standard',
-    videoMethod: 'filter',
-  });
 
   useEffect(() => {
     clearStorage().catch(console.error);
@@ -37,8 +32,8 @@ export default function UpscalerPage() {
         file,
         type,
         mode: 'upscale',
-        model: defaultOptions.model as any,
-        videoMethod: defaultOptions.videoMethod as any,
+        model: 'standard',
+        videoMethod: 'filter',
         limitSeconds: 10,
         status: 'storing',
         progress: 0,
@@ -154,14 +149,7 @@ export default function UpscalerPage() {
         </div>
 
         {tasks.length === 0 ? (
-          <>
-            <PreUploadSettings 
-              mode="upscale" 
-              settings={defaultOptions} 
-              onUpdate={(u) => setDefaultOptions(prev => ({ ...prev, ...u }))} 
-            />
-            <FileUploader onFilesAdded={handleFilesAdded} mode="upscale" />
-          </>
+          <FileUploader onFilesAdded={handleFilesAdded} mode="upscale" />
         ) : (
           <FileList
             tasks={tasks}
