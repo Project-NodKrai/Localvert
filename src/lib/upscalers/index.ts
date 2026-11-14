@@ -2,11 +2,13 @@ import Upscaler from 'upscaler';
 import * as tf from '@tensorflow/tfjs';
 import { setWasmPaths } from '@tensorflow/tfjs-backend-wasm';
 import { acquireFFmpeg, releaseFFmpeg } from '../converters/media';
+import { adviseImageUpscale, detectDeviceHints } from './performance';
+import type { ImageUpscaleModel } from './performance';
 
 // Explicitly set WASM paths from CDN for reliability in sandboxed environment
 setWasmPaths('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm/dist/');
 
-let upscalerInstance: any = null;
+const imageUpscalers: Partial<Record<ImageUpscaleModel, Promise<any>>> = {};
 let tfInitialized = false;
 
 async function initTfjs() {
@@ -50,12 +52,23 @@ async function initTfjs() {
   tfInitialized = true;
 }
 
-export async function getUpscaler() {
+export async function getUpscaler(model: ImageUpscaleModel = 'standard') {
   await initTfjs();
-  if (!upscalerInstance) {
-    upscalerInstance = new Upscaler();
+  if (!imageUpscalers[model]) {
+    imageUpscalers[model] = (async () => {
+      if (model === 'ultra') {
+        // Load the heavier model only when the user explicitly chooses Ultra.
+        const { default: medium2x } = await import('@upscalerjs/esrgan-medium/2x');
+        return new Upscaler({ model: medium2x });
+      }
+      // The shipped default 2x model is the ESRGAN Slim 2x model.
+      return new Upscaler();
+    })().catch((error) => {
+      delete imageUpscalers[model];
+      throw error;
+    });
   }
-  return upscalerInstance;
+  return imageUpscalers[model];
 }
 
 export async function upscaleImage(file: File, model: 'standard' | 'ultra', onProgress?: (p: number) => void): Promise<Blob> {
@@ -66,6 +79,8 @@ export async function upscaleImage(file: File, model: 'standard' | 'ultra', onPr
       console.warn('Shader error detected during image upscale. Retrying with WASM backend...');
       await tf.setBackend('wasm');
       await tf.ready();
+      // Recreate the model on the fallback backend rather than retaining the failed instance.
+      delete imageUpscalers[model];
       return await upscaleImageInternal(file, model, onProgress);
     }
     throw e;
@@ -73,16 +88,27 @@ export async function upscaleImage(file: File, model: 'standard' | 'ultra', onPr
 }
 
 async function upscaleImageInternal(file: File, model: 'standard' | 'ultra', onProgress?: (p: number) => void): Promise<Blob> {
-  const upscaler = await getUpscaler();
-  
+  const upscaler = await getUpscaler(model);
+
   const img = new Image();
-  img.src = URL.createObjectURL(file);
-  await new Promise((resolve) => (img.onload = resolve));
+  const imageUrl = URL.createObjectURL(file);
+  img.src = imageUrl;
+  try {
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error('이미지를 불러올 수 없습니다.'));
+    });
+  } catch (error) {
+    URL.revokeObjectURL(imageUrl);
+    throw error;
+  }
+
+  const advice = adviseImageUpscale(model, img.naturalWidth, img.naturalHeight, detectDeviceHints());
   
   try {
     // Strategy 1: Forced Tiling to avoid GPU Memory Limit (16384^2)
     const result = await upscaler.upscale(img, {
-      patchSize: 512,
+      patchSize: advice.patchSize,
       padding: 10,
       progress: (progress: number) => {
         if (onProgress) onProgress(Math.round(progress * 100));
@@ -92,7 +118,7 @@ async function upscaleImageInternal(file: File, model: 'standard' | 'ultra', onP
     const response = await fetch(result);
     return await response.blob();
   } finally {
-    URL.revokeObjectURL(img.src);
+    URL.revokeObjectURL(imageUrl);
   }
 }
 
