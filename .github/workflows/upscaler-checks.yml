@@ -1,0 +1,29 @@
+name: Upscaler quality checks
+
+on:
+  pull_request:
+    paths:
+      - 'src/lib/upscalers/**'
+      - 'src/pages/UpscalerPage.tsx'
+      - 'src/components/AdvancedSettings.tsx'
+      - 'tests/upscaler-guidance.test.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/upscaler-checks.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build

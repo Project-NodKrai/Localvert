@@ -1,10 +1,11 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import Header from '../components/Header';
 import FileUploader from '../components/FileUploader';
 import FileList from '../components/FileList';
 import { Task, UpscaleTask, FileType } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { upscaleImage, upscaleVideo } from '../lib/upscalers';
+import { adviseImageUpscale, detectDeviceHints } from '../lib/upscalers/performance';
 import { storeFile, removeStoredFile, clearStorage, getStoredFile } from '../lib/storage';
 import { useTaskQueue } from '../lib/taskQueue';
 
@@ -17,6 +18,8 @@ function getFileType(file: File): FileType {
 
 export default function UpscalerPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const deviceHints = useMemo(() => detectDeviceHints(), []);
+  const [pendingConfirmation, setPendingConfirmation] = useState<{ ids: string[]; messages: string[] } | null>(null);
 
   useEffect(() => {
     clearStorage().catch(console.error);
@@ -105,8 +108,42 @@ export default function UpscalerPage() {
     return { blob, resultName: `upscaled_${task.file.name}` };
   };
 
-  const { enqueue: handleRunTask, enqueueAll: handleRunAll, cancelTask } =
+  const { enqueue, cancelTask } =
     useTaskQueue(tasks, setTasks, processTask);
+
+  // Warnings are advisory. Even an underpowered device may process the image if
+  // the user explicitly chooses to continue. The shared queue remains in charge.
+  const requestProcessing = (ids: string[]) => {
+    const chosen = tasks.filter(task => ids.includes(task.id) && task.status === 'idle' && task.stored);
+    if (!chosen.length) return;
+    const warnings: string[] = [];
+    for (const task of chosen) {
+      if (task.mode !== 'upscale') continue;
+      if (task.type === 'image') {
+        const advice = adviseImageUpscale(task.model, task.width ?? 0, task.height ?? 0, deviceHints);
+        for (const warning of advice.warnings) {
+          if (!warnings.includes(warning)) warnings.push(warning);
+        }
+      } else if (task.type === 'video' && task.videoMethod === 'ai') {
+        const message = '동영상 AI 복원은 프레임 전체를 변환하므로 긴 영상에서 메모리 부족이나 장시간 처리가 발생할 수 있어.';
+        if (!warnings.includes(message)) warnings.push(message);
+      }
+    }
+    if (warnings.length) {
+      setPendingConfirmation({ ids: chosen.map(task => task.id), messages: warnings });
+    } else {
+      chosen.forEach(task => enqueue(task.id));
+    }
+  };
+
+  const confirmProcessing = () => {
+    if (!pendingConfirmation) return;
+    pendingConfirmation.ids.forEach(id => enqueue(id));
+    setPendingConfirmation(null);
+  };
+
+  const handleRunTask = (id: string) => requestProcessing([id]);
+  const handleRunAll = () => requestProcessing(tasks.filter(task => task.status === 'idle').map(task => task.id));
 
   return (
     <div className="min-h-screen bg-neutral-900 text-white font-sans selection:bg-red-500/30">
@@ -136,6 +173,30 @@ export default function UpscalerPage() {
           />
         )}
       </main>
+      {pendingConfirmation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div role="alertdialog" aria-modal="true" aria-labelledby="upscale-warning-title"
+            className="w-full max-w-lg rounded-2xl border border-amber-700/40 bg-neutral-900 p-6 shadow-2xl">
+            <h2 id="upscale-warning-title" className="mb-3 text-lg font-bold text-amber-300">
+              이 기기에서는 복원이 느리거나 실패할 수 있어
+            </h2>
+            <p className="mb-3 text-sm text-neutral-300">
+              권장 사양에 못 미쳐도 직접 실행할 수 있어. 메모리 부족이나 브라우저 종료에 대비해 원본 파일은 보관해 줘.
+            </p>
+            <ul className="mb-5 list-disc space-y-2 pl-5 text-sm text-neutral-300">
+              {pendingConfirmation.messages.map(message => <li key={message}>{message}</li>)}
+            </ul>
+            <div className="flex flex-wrap justify-end gap-3">
+              <button type="button" onClick={() => setPendingConfirmation(null)}
+                className="rounded-lg bg-neutral-700 px-4 py-2 text-white hover:bg-neutral-600">취소</button>
+              <button type="button" onClick={confirmProcessing}
+                className="rounded-lg bg-red-600 px-4 py-2 font-semibold text-white hover:bg-red-500">
+                그래도 실행
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
