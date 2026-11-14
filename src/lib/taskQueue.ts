@@ -21,7 +21,7 @@ export function getQueueConcurrency(tasks: Task[]): number {
     : undefined;
 
   let limit = 1;
-  if (cores >= 12 && memory !== undefined && memory >= 16) limit = 10;
+  if (cores >= 12 && memory !== undefined && memory >= 8) limit = 10;
   else if (cores >= 8 && memory !== undefined && memory >= 8) limit = 5;
   else if (cores >= 6 && (memory === undefined || memory >= 4)) limit = 3;
   else if (cores >= 4 && (memory === undefined || memory >= 4)) limit = 2;
