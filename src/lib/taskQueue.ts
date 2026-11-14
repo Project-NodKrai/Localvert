@@ -157,10 +157,10 @@ export function useTaskQueue<T extends Task>(
 
     const acceptedIds = new Set(accepted);
     tasksRef.current = tasksRef.current.map((t) =>
-      acceptedIds.has(t.id) ? { ...t, status: 'queued' } : t
+      acceptedIds.has(t.id) ? ({ ...t, status: 'queued' } as T) : t
     );
     setTasks((prev) => prev.map((t) =>
-      acceptedIds.has(t.id) ? { ...t, status: 'queued' } : t
+      acceptedIds.has(t.id) ? ({ ...t, status: 'queued' } as T) : t
     ));
 
     pendingRef.current.push(...accepted);
