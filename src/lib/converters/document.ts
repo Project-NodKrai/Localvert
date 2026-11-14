@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import { renderSpreadsheetPdf } from './pdf';
 
 const OUTPUT_FORMATS: Record<string, { type: string; bookType: XLSX.BookType }> = {
   xlsx: { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', bookType: 'xlsx' },
@@ -8,7 +9,7 @@ const OUTPUT_FORMATS: Record<string, { type: string; bookType: XLSX.BookType }> 
   txt: { type: 'text/plain;charset=utf-8', bookType: 'txt' },
 };
 const INPUT_FORMATS = new Set(['xlsx', 'xls', 'ods', 'csv', 'json', 'html', 'txt', 'rtf']);
-const OUTPUT_EXTENSIONS = new Set([...Object.keys(OUTPUT_FORMATS), 'csv', 'json', 'rtf']);
+const OUTPUT_EXTENSIONS = new Set([...Object.keys(OUTPUT_FORMATS), 'csv', 'json', 'rtf', 'pdf']);
 
 function getExtension(file: File): string {
   const name = file.name.toLowerCase();
@@ -90,6 +91,7 @@ export async function convertDocument(file: File, targetFormat: string): Promise
   const target = targetFormat.toLowerCase();
 
   // PDF and DOCX layout documents cannot be processed by SheetJS.
+  if (extension === 'pdf' && target === 'pdf') return { blob: file, ext: 'pdf' };
   if (!INPUT_FORMATS.has(extension)) {
     throw new Error((extension ? extension.toUpperCase() : '알 수 없는 형식') + ' 입력은 표 데이터 변환기로 처리할 수 없습니다. PDF/DOCX는 별도 변환 엔진이 필요합니다.');
   }
@@ -112,6 +114,9 @@ export async function convertDocument(file: File, targetFormat: string): Promise
   }
   if (target === 'rtf') {
     return { blob: new Blob([writeRtf(sheet)], { type: 'application/rtf' }), ext: 'rtf' };
+  }
+  if (target === 'pdf') {
+    return { blob: await renderSpreadsheetPdf(workbook), ext: 'pdf' };
   }
   const format = OUTPUT_FORMATS[target];
   const encoded = XLSX.write(workbook, { type: 'array', bookType: format.bookType });
