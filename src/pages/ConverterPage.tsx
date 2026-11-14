@@ -6,6 +6,7 @@ import { Task, ConvertTask, FileType, FORMATS } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { processConversion } from '../lib/converters';
 import { storeFile, removeStoredFile, clearStorage, getStoredFile } from '../lib/storage';
+import { useTaskQueue } from '../lib/taskQueue';
 
 function getFileType(file: File): FileType {
   const t = file.type;
@@ -88,6 +89,7 @@ export default function ConverterPage() {
   };
 
   const handleRemoveTask = (id: string) => {
+    cancelTask(id);
     setTasks((prev) => {
       const taskToRemove = prev.find((t) => t.id === id);
       if (taskToRemove?.resultUrl) URL.revokeObjectURL(taskToRemove.resultUrl);
@@ -96,42 +98,20 @@ export default function ConverterPage() {
     removeStoredFile(id).catch(console.error);
   };
 
-  const handleRunTask = async (id: string) => {
-    const task = tasks.find((t) => t.id === id);
-    if (!task || task.status === 'processing' || !task.stored || task.mode !== 'convert') return;
-
-    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, status: 'processing', progress: 0 } : t)));
-
-    try {
-      const storedFile = await getStoredFile(id);
-      if (!storedFile) throw new Error('File not found in local storage');
-      const fileObj = new File([storedFile], task.file.name, { type: task.file.type });
-
-      const { blob, ext } = await processConversion(id, fileObj, task.type, task.targetFormat, (progress) => {
-        setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, progress } : t)));
-      });
-
-      const url = URL.createObjectURL(blob);
-      const resName = `${task.file.name.split('.').slice(0, -1).join('.')}.${ext}`;
-
-      setTasks((prev) =>
-        prev.map((t) =>
-          t.id === id ? { ...t, status: 'done', progress: 100, resultUrl: url, resultName: resName, resultSize: blob.size } : t
-        )
-      );
-    } catch (error: any) {
-      console.error(error);
-      setTasks((prev) =>
-        prev.map((t) =>
-          t.id === id ? { ...t, status: 'error', errorMsg: error.message || 'Processing failed' } : t
-        )
-      );
-    }
+  const processTask = async (task: Task, onProgress: (progress: number) => void) => {
+    const storedFile = await getStoredFile(task.id);
+    if (!storedFile) throw new Error('File not found in local storage');
+    const fileObj = new File([storedFile], task.file.name, { type: task.file.type });
+    if (task.mode !== 'convert') throw new Error('Invalid task type');
+    const { blob, ext } = await processConversion(task.id, fileObj, task.type, task.targetFormat, onProgress);
+    return {
+      blob,
+      resultName: `${task.file.name.split('.').slice(0, -1).join('.') || task.file.name}.${ext}`
+    };
   };
 
-  const handleRunAll = () => {
-    tasks.filter((t) => t.status === 'idle').forEach((t) => handleRunTask(t.id));
-  };
+  const { enqueue: handleRunTask, enqueueAll: handleRunAll, cancelTask } =
+    useTaskQueue(tasks, setTasks, processTask);
 
   return (
     <div className="min-h-screen bg-neutral-900 text-white font-sans selection:bg-red-500/30">
