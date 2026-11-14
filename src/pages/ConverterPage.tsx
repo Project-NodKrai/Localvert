@@ -12,9 +12,10 @@ function getFileType(file: File): FileType {
   const t = file.type;
   const name = file.name.toLowerCase();
   
-  if (t.startsWith('video/') || name.endsWith('.hevc') || name.endsWith('.h265')) return 'video';
-  if (t.startsWith('audio/') || name.endsWith('.alac')) return 'audio';
-  if (t.startsWith('image/') || name.endsWith('.heic') || name.endsWith('.heif') || name.endsWith('.svg')) return 'image';
+  const extension = name.split('.').pop() || '';
+  if (t.startsWith('video/') || ['mp4','webm','avi','mov','mkv','flv','wmv','m4v','ogv','3gp','hevc','h265'].includes(extension)) return 'video';
+  if (t.startsWith('audio/') || ['mp3','wav','ogg','aac','flac','m4a','wma','opus','amr','alac','aiff','mka'].includes(extension)) return 'audio';
+  if (t.startsWith('image/') || ['png','jpg','jpeg','webp','gif','bmp','tiff','tif','ico','avif','heic','heif','svg'].includes(extension)) return 'image';
   
   const docExts = ['.xlsx', '.xls', '.csv', '.json', '.ods', '.html', '.txt', '.rtf', '.pdf', '.docx'];
   if (
@@ -48,9 +49,7 @@ export default function ConverterPage() {
       const type = getFileType(file);
       
       let possibleFormats = FORMATS[type] || [];
-      if (type === 'video' || type === 'audio') {
-        possibleFormats = Array.from(new Set([...FORMATS.video, ...FORMATS.audio]));
-      } else if (type === 'unknown') {
+      if (type === 'unknown') {
         possibleFormats = FORMATS.unknown;
       }
       
@@ -84,11 +83,11 @@ export default function ConverterPage() {
   }, []);
 
   const handleTargetFormatChange = (id: string, format: string) => {
-    setTasks((prev) => prev.map((t) => (t.id === id && t.mode === 'convert' ? { ...t, targetFormat: format } : t)));
+    setTasks((prev) => prev.map((t) => (t.id === id && t.mode === 'convert' && FORMATS[t.type]?.includes(format) ? { ...t, targetFormat: format } : t)));
   };
 
   const handleTargetFormatChangeAll = (format: string) => {
-    setTasks((prev) => prev.map((t) => (t.mode === 'convert' ? { ...t, targetFormat: format } : t)));
+    setTasks((prev) => prev.map((t) => (t.mode === 'convert' && FORMATS[t.type]?.includes(format) ? { ...t, targetFormat: format } : t)));
   };
 
   const handleRemoveTask = (id: string) => {

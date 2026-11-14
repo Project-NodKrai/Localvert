@@ -10,6 +10,7 @@ interface FormatSelectorProps {
   disabled?: boolean;
   defaultCategory?: FileType;
   label?: string;
+  allowedFormats?: string[];
 }
 
 const CATEGORY_LABELS: Record<FileType, string> = {
@@ -23,7 +24,7 @@ const CATEGORY_LABELS: Record<FileType, string> = {
 
 const CATEGORY_ORDER: FileType[] = ['unknown', 'video', 'audio', 'image', 'document', 'archive'];
 
-export function FormatSelector({ currentFormat, onFormatChange, disabled, defaultCategory = 'video', label }: FormatSelectorProps) {
+export function FormatSelector({ currentFormat, onFormatChange, disabled, defaultCategory = 'video', label, allowedFormats }: FormatSelectorProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   
@@ -31,12 +32,13 @@ export function FormatSelector({ currentFormat, onFormatChange, disabled, defaul
 
   const filteredFormats = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const allowed = allowedFormats ? new Set(allowedFormats) : null;
     
     if (q) {
       const results: string[] = [];
       Object.entries(FORMATS).forEach(([cat, list]) => {
         list.forEach(f => {
-          if (f.includes(q) && !results.includes(f)) {
+          if (f.includes(q) && (!allowed || allowed.has(f)) && !results.includes(f)) {
             results.push(f);
           }
         });
@@ -49,14 +51,14 @@ export function FormatSelector({ currentFormat, onFormatChange, disabled, defaul
       const all: string[] = [];
       Object.values(FORMATS).forEach(list => {
         list.forEach(f => {
-          if (!all.includes(f)) all.push(f);
+          if ((!allowed || allowed.has(f)) && !all.includes(f)) all.push(f);
         });
       });
       return all;
     }
     
-    return FORMATS[activeCategory] || [];
-  }, [search, activeCategory]);
+    return (FORMATS[activeCategory] || []).filter(f => !allowed || allowed.has(f));
+  }, [search, activeCategory, allowedFormats]);
 
   const handleSelect = (format: string) => {
     onFormatChange(format);

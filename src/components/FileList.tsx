@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { AnimatePresence } from 'motion/react';
-import { Task, AppMode, ConvertTask, CompressTask, UpscaleTask } from '../types';
+import { Task, AppMode, ConvertTask, CompressTask, UpscaleTask, FORMATS } from '../types';
 import { X, Settings, Download, Plus, Play } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { FormatSelector } from './FormatSelector';
@@ -104,6 +104,7 @@ export default function FileList({
                           currentFormat={(task as ConvertTask).targetFormat}
                           onFormatChange={(f) => onFormatChange(task.id, f)}
                           defaultCategory={task.type}
+                          allowedFormats={FORMATS[task.type] || []}
                           disabled={task.type === 'unknown'}
                         />
                       </div>
@@ -225,6 +226,8 @@ export default function FileList({
                       currentFormat={tasks.every(t => t.mode === 'convert' && t.targetFormat === (tasks[0] as ConvertTask).targetFormat) ? (tasks[0] as ConvertTask).targetFormat : undefined}
                       onFormatChange={onFormatChangeAll}
                       defaultCategory={tasks[0]?.type || 'image'}
+                      allowedFormats={tasks.reduce<string[]>((current, task, i) =>
+                        i === 0 ? [...FORMATS[task.type]] : current.filter(fmt => FORMATS[task.type].includes(fmt)), [])}
                     />
                   </div>
                 )}
