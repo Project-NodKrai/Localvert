@@ -1,5 +1,4 @@
 import imageCompression from 'browser-image-compression';
-import heic2any from 'heic2any';
 import { Canvg } from 'canvg';
 // @ts-ignore
 import ImageTracer from 'imagetracerjs';
@@ -45,7 +44,11 @@ export async function convertImage(
   // heic2any uses a canvas-based decoder; this does NOT promise HDR, ICC or EXIF retention.
   let processedFile = file;
   if (name.endsWith('.heic') || name.endsWith('.heif')) {
-    const decode = dependencies.decodeHeic ?? ((input: File) => heic2any({ blob: input, toType: 'image/png' }));
+    const decode = dependencies.decodeHeic ?? (async (input: File) => {
+      // heic2any initializes a browser Worker at import time; load only when needed.
+      const { default: heic2any } = await import('heic2any');
+      return heic2any({ blob: input, toType: 'image/png' });
+    });
     const result = await decode(file);
     const blob = Array.isArray(result) ? result[0] : result;
     if (!blob) throw new Error('HEIC decoder returned no image');
