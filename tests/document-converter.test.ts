@@ -24,8 +24,8 @@ test('CSV -> JSON uses first row as headers', async () => {
 test('TXT -> XLSX preserves lines', async () => {
   const result = await convertDocument(input('notes.txt', 'first line\nsecond line', 'text/plain'), 'xlsx');
   const wb = XLSX.read(await result.blob.arrayBuffer(), { type: 'array' });
-  assert.equal(wb.Sheets.Data.A1.v, 'first line');
-  assert.equal(wb.Sheets.Data.A2.v, 'second line');
+  assert.equal(wb.Sheets[wb.SheetNames[0]].A1.v, 'first line');
+  assert.equal(wb.Sheets[wb.SheetNames[0]].A2.v, 'second line');
 });
 test('CSV -> RTF writes a genuine RTF header', async () => {
   const result = await convertDocument(input('report.csv', 'a,b\n1,2', 'text/csv'), 'rtf');
