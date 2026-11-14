@@ -1,5 +1,6 @@
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { toBlobURL } from '@ffmpeg/util';
+import { buildMediaOutputArgs, matchesMediaSignature, MEDIA_MIME } from './mediaProfiles';
 
 let ffmpeg: FFmpeg | null = null;
 let ffmpegBusy = false;
@@ -33,7 +34,9 @@ export async function acquireFFmpeg(): Promise<FFmpeg> {
     } catch (err) {
       ffmpegBusy = false;
       ffmpeg = null;
-      throw new Error('Failed to load FFmpeg engine. This might be due to security headers (COOP/COEP) or network issues.');
+      const next = queue.shift();
+      if (next) next();
+      throw new Error('FFmpeg 엔진을 불러올 수 없어. 네트워크 및 브라우저 보안 설정을 확인해 줘.');
     }
   }
   return ffmpeg;
@@ -45,165 +48,84 @@ export function releaseFFmpeg() {
   if (next) next();
 }
 
-export async function convertMedia(id: string, file: File, targetFormat: string, onProgress?: (p: number) => void): Promise<{ blob: Blob; ext: string }> {
+const AUDIO_INPUTS = new Set([
+  'mp3', 'wav', 'ogg', 'aac', 'flac', 'm4a', 'wma', 'opus', 'amr', 'alac', 'aiff', 'mka',
+]);
+const IMAGE_INPUTS = new Set(['png', 'jpg', 'jpeg', 'webp', 'bmp', 'tiff', 'tif', 'ico', 'avif']);
+const VIDEO_INPUTS = new Set(['mp4', 'webm', 'avi', 'mov', 'mkv', 'flv', 'wmv', 'm4v', 'ogv', '3gp', 'hevc', 'h265', 'gif']);
+
+function sourceKind(file: File): 'image' | 'audio' | 'video' {
+  const ext = file.name.split('.').pop()?.toLowerCase() || '';
+  if (AUDIO_INPUTS.has(ext)) return 'audio';
+  if (IMAGE_INPUTS.has(ext)) return 'image';
+  if (VIDEO_INPUTS.has(ext)) return 'video';
+  if (file.type.startsWith('audio/')) return 'audio';
+  if (file.type.startsWith('image/')) return 'image';
+  return 'video';
+}
+
+export async function convertMedia(
+  id: string,
+  file: File,
+  targetFormat: string,
+  onProgress?: (p: number) => void,
+): Promise<{ blob: Blob; ext: string }> {
+  const target = targetFormat.toLowerCase();
+  const kind = sourceKind(file);
+  // Validate before loading the expensive WASM engine or allocating its FS.
+  const outputArgs = buildMediaOutputArgs(target, kind);
   const instance = await acquireFFmpeg();
   const logs: string[] = [];
-
+  const progressHandler = ({ progress }: { progress: number }) => {
+    if (onProgress && Number.isFinite(progress)) onProgress(Math.max(0, Math.min(100, Math.round(progress * 100))));
+  };
   const logHandler = ({ message }: { message: string }) => {
     logs.push(message);
-    if (logs.length > 30) logs.shift();
-    console.log('[FFmpeg Log]:', message);
+    if (logs.length > 60) logs.shift();
   };
-  
-  const progressHandler = ({ progress }: { progress: number }) => {
-    if (onProgress) onProgress(Math.round(progress * 100)); // progress ranges from 0 to 1
-  };
-  
-  instance.on('log', logHandler);
   instance.on('progress', progressHandler);
+  instance.on('log', logHandler);
 
-  const extMap: Record<string, string> = {
-    'video/mp4': 'mp4',
-    'video/webm': 'webm',
-    'video/x-msvideo': 'avi',
-    'video/quicktime': 'mov',
-    'video/x-matroska': 'mkv',
-    'video/x-flv': 'flv',
-    'video/x-ms-wmv': 'wmv',
-    'video/x-m4v': 'm4v',
-    'video/ogg': 'ogv',
-    'video/3gpp': '3gp',
-    'image/gif': 'gif',
-    'audio/mpeg': 'mp3',
-    'audio/wav': 'wav',
-    'audio/x-wav': 'wav',
-    'audio/ogg': 'ogg',
-    'audio/flac': 'flac',
-    'audio/x-flac': 'flac',
-    'audio/mp4': 'm4a',
-    'audio/aac': 'aac',
-    'audio/x-ms-wma': 'wma',
-    'audio/opus': 'opus',
-    'audio/amr': 'amr'
-  };
-
-  const fileExt = file.name.split('.').pop() || extMap[file.type] || 'tmp';
-  const inputName = `input.${fileExt}`;
-  const outputName = `output.${targetFormat}`;
-
+  const extension = (file.name.split('.').pop() || 'bin').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+  const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '');
+  const inputName = 'localvert_' + safeId + '_in.' + extension;
+  const outputName = 'localvert_' + safeId + '_out.' + target;
   try {
-    const uint8 = new Uint8Array(await file.arrayBuffer());
-    
-    // Safety check for empty buffer
-    if (uint8.length === 0) {
-      throw new Error('Input file is empty.');
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    if (!bytes.length) throw new Error('빈 입력 파일은 변환할 수 없어.');
+    await instance.writeFile(inputName, bytes);
+
+    const inputArgs = kind === 'image'
+      ? ['-loop', '1', '-framerate', '24', '-i', inputName]
+      : ['-i', inputName];
+    // Static image -> video: produce a short 3-second still video.
+    const stillToVideo = kind === 'image' && !['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(target);
+    const args = [
+      '-hide_banner', '-y', ...inputArgs,
+      ...(stillToVideo ? ['-t', '3'] : []),
+      ...outputArgs,
+      outputName,
+    ];
+    const exit = await instance.exec(args);
+    if (exit !== 0) {
+      const summary = logs.slice(-8).filter(line => /error|invalid|unknown|not found|unsupported|could not|encoder/i.test(line));
+      throw new Error('FFmpeg ' + target.toUpperCase() + ' 변환 실패 (코드 ' + exit + '). ' +
+        (summary.join(' | ') || '입력 파일이나 브라우저 FFmpeg 코덱 지원을 확인해 줘.'));
     }
 
-    // Ensure a clean state
+    const result = await instance.readFile(outputName);
+    if (typeof result === 'string') throw new Error('FFmpeg가 바이너리 파일 대신 텍스트를 반환했어.');
+    const data = new Uint8Array(result);
+    if (!matchesMediaSignature(data, target)) {
+      throw new Error('변환 출력이 실제 ' + target.toUpperCase() + ' 형식과 일치하지 않아 다운로드를 중단했어.');
+    }
+    if (onProgress) onProgress(100);
+    return { blob: new Blob([data], { type: MEDIA_MIME[target] || 'application/octet-stream' }), ext: target };
+  } finally {
+    instance.off('progress', progressHandler);
+    instance.off('log', logHandler);
     try { await instance.deleteFile(inputName); } catch {}
     try { await instance.deleteFile(outputName); } catch {}
-
-    await instance.writeFile(inputName, uint8);
-    
-    let args = ['-i', inputName, '-hide_banner', '-y'];
-    
-    const audioFormats = ['mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac', 'wma', 'opus', 'amr', 'alac', 'aiff', 'mka'];
-    const isAudioTarget = audioFormats.includes(targetFormat);
-
-    // Optimized codec mapping for browser WASM performance and compatibility
-    if (isAudioTarget) {
-      args.push('-vn');
-      if (targetFormat === 'mp3') {
-        args.push('-c:a', 'libmp3lame', '-q:a', '4', '-ar', '44100');
-      } else if (targetFormat === 'wav') {
-        args.push('-c:a', 'pcm_s16le');
-      } else if (targetFormat === 'aac' || targetFormat === 'm4a') {
-        args.push('-c:a', 'aac');
-      }
-    } else if (targetFormat === 'mp4' || targetFormat === 'hevc') {
-      args.push('-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-movflags', 'faststart');
-    } else if (targetFormat === 'gif') {
-      args.push('-vf', 'fps=10,scale=320:-1:flags=lanczos', '-c:v', 'gif');
-    } else if (targetFormat === 'webm') {
-      args.push('-c:v', 'libvpx', '-preset', 'ultrafast', '-c:a', 'libvorbis');
-    } else if (['jpg', 'jpeg', 'png', 'webp'].includes(targetFormat)) {
-      args.push('-vframes', '1', '-q:v', '2');
-    }
-
-    args.push(outputName);
-
-    const exitCode = await instance.exec(args);
-    if (exitCode !== 0) {
-      console.warn(`Primary conversion failed (${exitCode}), retrying with simplest configuration...`);
-      try { await instance.deleteFile(outputName); } catch {}
-      
-      // Fallback: Extremely simple one-pass conversion
-      const fallbackExitCode = await instance.exec(['-i', inputName, outputName]);
-      if (fallbackExitCode !== 0) {
-        // Look for common fatal error patterns in logs
-        const fatalError = logs.find(l => 
-          l.includes('Error while') || 
-          l.includes('Invalid data') || 
-          l.includes('Unknown encoder') ||
-          l.includes('Could not write header')
-        );
-        
-        throw new Error(`FFmpeg failed (Code ${fallbackExitCode}).\n${fatalError ? `[원인]: ${fatalError}` : '브라우저 메모리 부족(대용량 파일) 혹은 인코딩 불가 포맷입니다.'}`);
-      }
-    }
-
-    const data = await instance.readFile(outputName);
-    
-    // Cleanup
-    try {
-      await instance.deleteFile(inputName);
-      await instance.deleteFile(outputName);
-    } catch (e) {
-      console.warn('Cleanup failed:', e);
-    }
-
-    const mimeMap: Record<string, string> = {
-      'mp4': 'video/mp4',
-      'webm': 'video/webm',
-      'avi': 'video/x-msvideo',
-      'mov': 'video/quicktime',
-      'mkv': 'video/x-matroska',
-      'flv': 'video/x-flv',
-      'wmv': 'video/x-ms-wmv',
-      'm4v': 'video/x-m4v',
-      'ogv': 'video/ogg',
-      '3gp': 'video/3gpp',
-      'hevc': 'video/mp4',
-      'gif': 'image/gif',
-      'mp3': 'audio/mpeg',
-      'wav': 'audio/wav',
-      'ogg': 'audio/ogg',
-      'flac': 'audio/flac',
-      'm4a': 'audio/mp4',
-      'aac': 'audio/aac',
-      'wma': 'audio/x-ms-wma',
-      'opus': 'audio/opus',
-      'amr': 'audio/amr',
-      'alac': 'audio/mp4',
-      'aiff': 'audio/x-aiff',
-      'mka': 'audio/x-matroska',
-      'ts': 'video/mp2t',
-      'vob': 'video/x-ms-vob',
-      'rmvb': 'video/vnd.rn-realvideo',
-      'dv': 'video/x-dv',
-      'mpg': 'video/mpeg',
-      'mpeg': 'video/mpeg',
-      'm2ts': 'video/mp2t',
-      'mts': 'video/mp2t'
-    };
-
-    const mimeType = mimeMap[targetFormat] || 'application/octet-stream';
-
-    return { blob: new Blob([(data as Uint8Array).buffer], { type: mimeType }), ext: targetFormat };
-  } finally {
-    instance.off('log', logHandler);
-    instance.off('progress', progressHandler);
     releaseFFmpeg();
   }
 }
-
