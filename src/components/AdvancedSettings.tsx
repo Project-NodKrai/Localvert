@@ -1,6 +1,7 @@
 import { motion } from 'motion/react';
 import { X, Settings, Check } from 'lucide-react';
 import { Task, CompressTask, UpscaleTask } from '../types';
+import { adviseImageUpscale, detectDeviceHints } from '../lib/upscalers/performance';
 
 interface AdvancedSettingsProps {
   task: Task;
@@ -13,6 +14,9 @@ export default function AdvancedSettings({ task, onUpdate, onClose }: AdvancedSe
   const isImage = task.type === 'image';
   const isUpscale = task.mode === 'upscale';
   const isCompress = task.mode === 'compress';
+  const deviceHints = isUpscale && isImage ? detectDeviceHints() : undefined;
+  const imageAdvice = isUpscale && isImage && task.mode === 'upscale'
+    ? adviseImageUpscale(task.model, task.width ?? 0, task.height ?? 0, deviceHints) : undefined;
 
   return (
     <motion.div
@@ -76,16 +80,26 @@ export default function AdvancedSettings({ task, onUpdate, onClose }: AdvancedSe
                        <Option 
                          selected={(task as UpscaleTask).model === 'standard'}
                          onClick={() => onUpdate({ model: 'standard' } as any)}
-                         title="Standard (빠름)"
-                         desc="기본 AI 모델을 사용합니다. 고해상도 작업 시 자동으로 분할(Tiling) 처리합니다."
+                         title="Standard (빠름 · ESRGAN Slim 2×)"
+                         desc="경량 모델 · 권장 시스템 RAM 16GB · 12MP 이하 이미지부터 시작"
                        />
                        <Option 
                          selected={(task as UpscaleTask).model === 'ultra'}
                          onClick={() => onUpdate({ model: 'ultra' } as any)}
-                         title="Ultra (고화질, 대용량)"
-                         desc="정교한 모델을 사용합니다. 물리적 GPU 한계를 넘는 크기는 조각내어 처리합니다."
+                         title="Ultra (고품질 · ESRGAN Medium 2×)"
+                         desc="고품질 모델 · 권장 시스템 RAM 32GB · 8MP 이하 이미지부터 시작"
                        />
                     </div>
+                    {imageAdvice && (
+                      <div className="rounded-xl border border-neutral-700 bg-neutral-800/60 p-3 text-xs text-neutral-300 space-y-2">
+                        <p>예상 출력: {imageAdvice.outputMegapixels.toFixed(1)}MP · 타일: {imageAdvice.patchSize}px</p>
+                        <p>RAM 권장치는 참고용이야. 브라우저가 실제 시스템 RAM과 GPU VRAM을 정확하게 제공하지는 않아.</p>
+                        {imageAdvice.warnings.map(message =>
+                          <p className="text-amber-300" key={message}>{message}</p>
+                        )}
+                        <p className="text-neutral-400">권장 사양에 못 미쳐도 사용자가 선택하면 실행할 수 있어.</p>
+                      </div>
+                    )}
                   </section>
                )}
                {isVideo && (
