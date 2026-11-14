@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { AUDIO_OUTPUT_FORMATS, VIDEO_OUTPUT_FORMATS, MEDIA_IMAGE_OUTPUT_FORMATS, buildMediaOutputArgs, matchesMediaSignature } from '../src/lib/converters/mediaProfiles';
 
 const available = spawnSync('ffmpeg', ['-version'], { encoding: 'utf8' }).status === 0;
+if (!available && process.env.CI) throw new Error('CI must install FFmpeg; format validation cannot silently skip.');
 // This tests the command line against native FFmpeg as a second line of defense.
 // The browser's WASM FFmpeg encoder set still requires a separate in-browser test.
 for (const target of [...AUDIO_OUTPUT_FORMATS, ...VIDEO_OUTPUT_FORMATS, ...MEDIA_IMAGE_OUTPUT_FORMATS]) {
