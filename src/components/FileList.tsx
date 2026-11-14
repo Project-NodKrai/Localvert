@@ -43,7 +43,7 @@ export default function FileList({
   const [settingsTask, setSettingsTask] = useState<Task | null>(null);
   
   const allIdle = tasks.some(t => t.status === 'idle');
-  const isProcessing = tasks.some(t => t.status === 'processing');
+  const isProcessing = tasks.some(t => t.status === 'processing' || t.status === 'queued');
 
   const getModeLabel = () => {
     if (mode === 'convert') return '변환';
@@ -138,6 +138,10 @@ export default function FileList({
                       </button>
                     )}
                   </div>
+                )}
+
+                {task.status === 'queued' && (
+                  <span className="text-neutral-400 text-sm font-medium">대기 중</span>
                 )}
 
                 {task.status === 'processing' && (
@@ -237,7 +241,7 @@ export default function FileList({
                disabled
                className="bg-neutral-800 text-neutral-500 border border-neutral-700 px-10 py-2.5 rounded-lg text-lg font-bold cursor-not-allowed animate-pulse"
              >
-                {getModeLabel()} 중...
+                {getModeLabel()} 진행 중 ({tasks.filter(t => t.status === 'done').length}/{tasks.length})
              </button>
            )}
         </div>

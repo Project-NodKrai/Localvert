@@ -5,7 +5,7 @@ export interface BaseTask {
   id: string;
   file: File;
   type: FileType;
-  status: 'idle' | 'storing' | 'processing' | 'done' | 'error';
+  status: 'idle' | 'storing' | 'queued' | 'processing' | 'done' | 'error';
   progress: number;
   stored: boolean;
   resultBlob?: Blob;
