@@ -6,6 +6,7 @@ import { Task, UpscaleTask, FileType } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { upscaleImage, upscaleVideo } from '../lib/upscalers';
 import { storeFile, removeStoredFile, clearStorage, getStoredFile } from '../lib/storage';
+import { useTaskQueue } from '../lib/taskQueue';
 
 function getFileType(file: File): FileType {
   const t = file.type;
@@ -83,6 +84,7 @@ export default function UpscalerPage() {
   };
 
   const handleRemoveTask = (id: string) => {
+    cancelTask(id);
     setTasks((prev) => {
       const taskToRemove = prev.find((t) => t.id === id);
       if (taskToRemove?.resultUrl) URL.revokeObjectURL(taskToRemove.resultUrl);
@@ -91,51 +93,20 @@ export default function UpscalerPage() {
     removeStoredFile(id).catch(console.error);
   };
 
-  const handleRunTask = async (id: string) => {
-    const task = tasks.find((t) => t.id === id);
-    if (!task || task.status === 'processing' || !task.stored || task.mode !== 'upscale') return;
-
-    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, status: 'processing', progress: 0 } : t)));
-
-    try {
-      const storedFile = await getStoredFile(id);
-      if (!storedFile) throw new Error('File not found in local storage');
-      const fileObj = new File([storedFile], task.file.name, { type: task.file.type });
-
-      let resultBlob: Blob;
-      if (task.type === 'image') {
-        resultBlob = await upscaleImage(fileObj, task.model, (progress) => {
-          setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, progress } : t)));
-        });
-      } else if (task.type === 'video') {
-        resultBlob = await upscaleVideo(id, fileObj, task.videoMethod, task.limitSeconds, (progress) => {
-          setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, progress } : t)));
-        });
-      } else {
-        throw new Error('전송한 파일 타입은 아직 고화질 복원을 지원하지 않습니다 (이미지/비디오 전용)');
-      }
-
-      const url = URL.createObjectURL(resultBlob);
-      const resName = `upscaled_${task.file.name}`;
-
-      setTasks((prev) =>
-        prev.map((t) =>
-          t.id === id ? { ...t, status: 'done', progress: 100, resultUrl: url, resultName: resName, resultSize: resultBlob.size } : t
-        )
-      );
-    } catch (error: any) {
-      console.error(error);
-      setTasks((prev) =>
-        prev.map((t) =>
-          t.id === id ? { ...t, status: 'error', errorMsg: error.message || 'Processing failed' } : t
-        )
-      );
-    }
+  const processTask = async (task: Task, onProgress: (progress: number) => void) => {
+    const storedFile = await getStoredFile(task.id);
+    if (!storedFile) throw new Error('File not found in local storage');
+    const fileObj = new File([storedFile], task.file.name, { type: task.file.type });
+    if (task.mode !== 'upscale') throw new Error('Invalid task type');
+    let blob: Blob;
+    if (task.type === 'image') blob = await upscaleImage(fileObj, task.model, onProgress);
+    else if (task.type === 'video') blob = await upscaleVideo(task.id, fileObj, task.videoMethod, task.limitSeconds, onProgress);
+    else throw new Error('이미지 또는 동영상만 복원할 수 있습니다.');
+    return { blob, resultName: `upscaled_${task.file.name}` };
   };
 
-  const handleRunAll = () => {
-    tasks.filter((t) => t.status === 'idle').forEach((t) => handleRunTask(t.id));
-  };
+  const { enqueue: handleRunTask, enqueueAll: handleRunAll, cancelTask } =
+    useTaskQueue(tasks, setTasks, processTask);
 
   return (
     <div className="min-h-screen bg-neutral-900 text-white font-sans selection:bg-red-500/30">
