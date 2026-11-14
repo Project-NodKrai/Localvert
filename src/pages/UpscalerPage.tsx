@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import Header from '../components/Header';
 import FileUploader from '../components/FileUploader';
 import FileList from '../components/FileList';
@@ -6,7 +6,7 @@ import { Task, UpscaleTask, FileType } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { upscaleImage, upscaleVideo } from '../lib/upscalers';
 import { adviseImageUpscale, detectDeviceHints } from '../lib/upscalers/performance';
-import { storeFile, removeStoredFile, clearStorage, getStoredFile } from '../lib/storage';
+import { storeFile, removeStoredFile, getStoredFile } from '../lib/storage';
 import { useTaskQueue } from '../lib/taskQueue';
 
 function getFileType(file: File): FileType {
@@ -21,9 +21,6 @@ export default function UpscalerPage() {
   const deviceHints = useMemo(() => detectDeviceHints(), []);
   const [pendingConfirmation, setPendingConfirmation] = useState<{ ids: string[]; messages: string[] } | null>(null);
 
-  useEffect(() => {
-    clearStorage().catch(console.error);
-  }, []);
 
   const handleFilesAdded = useCallback(async (files: FileList | File[]) => {
     const fileArray = Array.from(files);
