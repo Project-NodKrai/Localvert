@@ -44,11 +44,17 @@ export interface UpscaleTask extends BaseTask {
 
 export type Task = ConvertTask | CompressTask | UpscaleTask;
 
+// Output choices only. HEIC, AMR and ALAC are accepted as input formats but
+// are deliberately not advertised as output: no valid encoder is bundled.
 export const FORMATS: Record<FileType, string[]> = {
-  video: ['mp4', 'webm', 'avi', 'mov', 'mkv', 'flv', 'wmv', 'm4v', 'ogv', '3gp', 'hevc', 'gif', 'mp3', 'wav', 'ogg', 'aac', 'flac', 'm4a', 'jpg', 'png', 'webp'],
-  audio: ['mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac', 'wma', 'opus', 'amr', 'alac', 'aiff', 'mka', 'mp4', 'webm', 'mkv', 'mov'],
-  image: ['png', 'jpg', 'webp', 'gif', 'bmp', 'tiff', 'ico', 'avif', 'heic', 'svg', 'mp4', 'webm'],
-  document: ['csv', 'xlsx', 'json', 'ods', 'html', 'txt', 'rtf', 'pdf', 'docx'],
+  video: [
+    'mp4','webm','avi','mov','mkv','flv','wmv','m4v','ogv','3gp','hevc',
+    'gif','mp3','wav','ogg','aac','flac','m4a','wma','opus','aiff','mka',
+    'jpg','png','webp',
+  ],
+  audio: ['mp3','wav','ogg','aac','flac','m4a','wma','opus','aiff','mka'],
+  image: ['png','jpg','webp','gif','bmp','tiff','ico','avif','svg','mp4','webm'],
+  document: ['csv','xlsx','xls','json','ods','html','txt','rtf','pdf'],
   archive: ['zip'],
-  unknown: ['mp4', 'mp3', 'wav', 'zip', 'png', 'jpg', 'pdf', 'docx'],
+  unknown: ['mp4','mp3','wav','ogg','flac','m4a','png','jpg','webp'],
 };
