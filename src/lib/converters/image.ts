@@ -4,7 +4,22 @@ import { Canvg } from 'canvg';
 // @ts-ignore
 import ImageTracer from 'imagetracerjs';
 
-export async function convertImage(file: File, targetFormat: string): Promise<{ blob: Blob; ext: string }> {
+// Optional overrides let regression tests assert that lossless PNG routing skips compression.
+export interface ImageConversionDependencies {
+  decodeHeic?: (input: File) => Promise<Blob | Blob[]>;
+  compressImage?: (input: File, options: {
+    maxSizeMB: number;
+    maxWidthOrHeight: number;
+    useWebWorker: boolean;
+    fileType: string;
+  }) => Promise<Blob>;
+}
+
+export async function convertImage(
+  file: File,
+  targetFormat: string,
+  dependencies: ImageConversionDependencies = {}
+): Promise<{ blob: Blob; ext: string }> {
   let mimeType = 'image/png';
   let ext = targetFormat;
   const name = file.name.toLowerCase();
@@ -26,12 +41,25 @@ export async function convertImage(file: File, targetFormat: string): Promise<{ 
     mimeType = mimeMap[targetFormat];
   }
 
-  // Handle HEIC/HEIF Source
+  // Converting HEIC to PNG must not pass through the 4096px / 10MB compressor.
+  // heic2any uses a canvas-based decoder; this does NOT promise HDR, ICC or EXIF retention.
   let processedFile = file;
   if (name.endsWith('.heic') || name.endsWith('.heif')) {
-    const result = await heic2any({ blob: file, toType: 'image/png' });
+    const decode = dependencies.decodeHeic ?? ((input: File) => heic2any({ blob: input, toType: 'image/png' }));
+    const result = await decode(file);
     const blob = Array.isArray(result) ? result[0] : result;
+    if (!blob) throw new Error('HEIC decoder returned no image');
+
+    // Return the decoded PNG itself: no resizing, additional encoding or size target.
+    if (targetFormat === 'png') return { blob, ext: 'png' };
+
     processedFile = new File([blob], file.name.replace(/\.(heic|heif)$/i, '.png'), { type: 'image/png' });
+  } else if (
+    targetFormat === 'png' &&
+    (file.type === 'image/png' || (file.type === '' && name.endsWith('.png')))
+  ) {
+    // PNG -> PNG should not needlessly encode and alter an already valid PNG.
+    return { blob: file, ext: 'png' };
   }
 
   // Handle SVG Source
@@ -90,7 +118,7 @@ export async function convertImage(file: File, targetFormat: string): Promise<{ 
       fileType: mimeType,
     };
     
-    const compressedFile = await imageCompression(processedFile, options);
+    const compressedFile = await (dependencies.compressImage ?? imageCompression)(processedFile, options);
     return { blob: compressedFile, ext };
   } catch (error) {
     console.error(error);

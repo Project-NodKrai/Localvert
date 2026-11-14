@@ -32,6 +32,9 @@ function getFileType(file: File): FileType {
 
 export default function ConverterPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const hasHeicPngTask = tasks.some(
+    (task) => task.mode === 'convert' && /\.(heic|heif)$/i.test(task.file.name) && task.targetFormat === 'png'
+  );
 
   useEffect(() => {
     clearStorage().catch(console.error);
@@ -143,6 +146,13 @@ export default function ConverterPage() {
             100% 로컬 환경에서 어떤 포맷이든 자유롭게 변환하세요.
           </h2>
         </div>
+
+        {hasHeicPngTask && (
+          <p role="note" className="w-full max-w-4xl mb-5 rounded-lg border border-neutral-700 bg-neutral-800/50 px-4 py-3 text-sm text-neutral-300">
+            HEIC → PNG는 디코딩된 해상도를 추가 축소하거나 10MB로 재압축하지 않습니다.
+            단, 원본 EXIF 메타데이터는 보존되지 않으며 HDR·광색역 색상 정보도 온전히 유지되지 않을 수 있습니다.
+          </p>
+        )}
 
         {tasks.length === 0 ? (
           <FileUploader onFilesAdded={handleFilesAdded} mode="convert" />
