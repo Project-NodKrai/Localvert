@@ -16,7 +16,8 @@ export default function AdvancedSettings({ task, onUpdate, onClose }: AdvancedSe
   const isUpscale = task.mode === 'upscale';
   const isCompress = task.mode === 'compress';
   const deviceHints = isUpscale && isImage ? detectDeviceHints() : undefined;
-  const imageAdvice = isUpscale && isImage && task.mode === 'upscale'
+  const imageAdvice = isUpscale && task.mode === 'upscale' &&
+    (isImage || (isVideo && task.videoMethod === 'ai'))
     ? adviseImageUpscale(task.model, task.width ?? 0, task.height ?? 0, deviceHints) : undefined;
 
   return (
@@ -177,7 +178,7 @@ export default function AdvancedSettings({ task, onUpdate, onClose }: AdvancedSe
 
           {isUpscale && (
              <>
-               {isImage && task.mode === 'upscale' && (
+               {(isImage || (isVideo && task.mode === 'upscale' && task.videoMethod === 'ai')) && task.mode === 'upscale' && (
                  <TierPurposeSelector task={task} onUpdate={onUpdate} imageAdvice={imageAdvice} />
                )}
                {isVideo && (

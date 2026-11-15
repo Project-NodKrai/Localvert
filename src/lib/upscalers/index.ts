@@ -2,6 +2,8 @@ import Upscaler from 'upscaler';
 import * as tf from '@tensorflow/tfjs';
 import { setWasmPaths } from '@tensorflow/tfjs-backend-wasm';
 import { acquireFFmpeg, releaseFFmpeg } from '../converters/media';
+import { matchesMediaSignature } from '../converters/mediaProfiles';
+import { validateVideoModel, parseVideoFrameRate, videoFrameEncodeArgs, videoFrameExtractArgs } from './videoFrames';
 import { adviseImageUpscale, detectDeviceHints } from './performance';
 import type { ImageUpscaleModel } from './performance';
 import { normalizeModelId } from './catalog';
@@ -131,151 +133,138 @@ async function upscaleImageInternal(file: File, model: ImageUpscaleModel, onProg
   }
 }
 
+/**
+ * Filter and AI video paths share the same FFmpeg WASM lock. AI mode now
+ * processes every extracted frame with the exact image model selected by user.
+ */
 export async function upscaleVideo(
-  id: string, 
-  file: File, 
-  method: 'filter' | 'ai', 
-  limitSeconds: number | undefined, 
-  onProgress?: (p: number) => void
+  id: string,
+  file: File,
+  method: 'filter' | 'ai',
+  limitSeconds: number | undefined,
+  onProgress?: (percent: number) => void,
+  model: ImageUpscaleModel = 'quicksrnet-small-4x',
 ): Promise<Blob> {
-  if (method === 'filter') {
-    return await upscaleVideoFilter(id, file, onProgress);
-  } else {
-    return await upscaleVideoAI(id, file, limitSeconds, onProgress);
-  }
+  if (method === 'filter') return upscaleVideoFilter(id, file, onProgress);
+  return upscaleVideoAI(id, file, limitSeconds, model, onProgress);
 }
 
-async function upscaleVideoFilter(id: string, file: File, onProgress?: (p: number) => void): Promise<Blob> {
-  const instance = await acquireFFmpeg();
-  const inputName = `input_${id}_${file.name}`;
-  const outputName = `upscaled_${id}_${file.name}`;
-  
-  try {
-    const uint8 = new Uint8Array(await file.arrayBuffer());
-    await instance.writeFile(inputName, uint8);
-    
-    const progressHandler = ({ progress }: { progress: number }) => {
-      if (onProgress) onProgress(Math.round(progress * 100));
-    };
-    instance.on('progress', progressHandler);
+function safeVideoNames(id: string, file: File, prefix: string) {
+  const clean = id.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 48) || 'task';
+  const extension = (file.name.split('.').pop() || 'mp4').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+  return {
+    inputName: prefix + '_' + clean + '_input.' + extension,
+    outputName: prefix + '_' + clean + '_output.mp4',
+    framePrefix: prefix + '_' + clean + '_frame_',
+    upscaledPrefix: prefix + '_' + clean + '_upscaled_',
+  };
+}
 
-    // Using unsharp filter for fast sharpening (simulated upscaling effect)
-    await instance.exec([
-      '-i', inputName,
-      '-vf', 'unsharp=5:5:1.0:5:5:0.0,scale=iw*1.5:ih*1.5:flags=lanczos',
-      '-c:v', 'libx264',
-      '-preset', 'ultrafast',
-      '-c:a', 'copy',
-      outputName
+async function upscaleVideoFilter(
+  id: string,
+  file: File,
+  onProgress?: (percent: number) => void,
+): Promise<Blob> {
+  const instance = await acquireFFmpeg();
+  const { inputName, outputName } = safeVideoNames(id, file, 'filter');
+  const progressHandler = ({ progress }: { progress: number }) => {
+    if (Number.isFinite(progress)) onProgress?.(Math.max(0, Math.min(100, Math.round(progress * 100))));
+  };
+  instance.on('progress', progressHandler);
+  try {
+    await instance.writeFile(inputName, new Uint8Array(await file.arrayBuffer()));
+    const code = await instance.exec([
+      '-hide_banner', '-y', '-i', inputName,
+      '-map', '0:v:0', '-map', '0:a:0?',
+      '-vf', 'unsharp=5:5:1.0:5:5:0.0,scale=trunc(iw*1.5/2)*2:trunc(ih*1.5/2)*2:flags=lanczos',
+      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast',
+      '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart',
+      '-f', 'mp4', outputName,
     ]);
-    
+    if (code !== 0) throw new Error('영상 필터 변환에 실패했어 (FFmpeg 코드 ' + code + ').');
     const data = await instance.readFile(outputName);
-    return new Blob([data], { type: 'video/mp4' });
+    if (typeof data === 'string' || !matchesMediaSignature(new Uint8Array(data), 'mp4')) {
+      throw new Error('필터 결과물이 정상적인 MP4 파일이 아니야.');
+    }
+    onProgress?.(100);
+    return new Blob([new Uint8Array(data)], { type: 'video/mp4' });
   } finally {
+    instance.off('progress', progressHandler);
+    try { await instance.deleteFile(inputName); } catch {}
+    try { await instance.deleteFile(outputName); } catch {}
     releaseFFmpeg();
   }
 }
 
 async function upscaleVideoAI(
-  id: string, 
-  file: File, 
-  limitSeconds: number | undefined, 
-  onProgress?: (p: number) => void
+  id: string,
+  file: File,
+  limitSeconds: number | undefined,
+  model: ImageUpscaleModel,
+  onProgress?: (percent: number) => void,
 ): Promise<Blob> {
+  // Do not quietly substitute the default model when a different one was chosen.
+  validateVideoModel(model);
   const instance = await acquireFFmpeg();
-  const inputName = `input_${id}_${file.name}`;
-  
+  const { inputName, outputName, framePrefix, upscaledPrefix } = safeVideoNames(id, file, 'ai');
+  const originalPattern = framePrefix + '%05d.png';
+  const outputPattern = upscaledPrefix + '%05d.png';
+  const logs: string[] = [];
+  const logHandler = ({ message }: { message: string }) => {
+    logs.push(message);
+    if (logs.length > 120) logs.shift();
+  };
+  instance.on('log', logHandler);
   try {
-    const uint8 = new Uint8Array(await file.arrayBuffer());
-    await instance.writeFile(inputName, uint8);
-    
-    // 1. Extract frames
-    const frameDir = `frames_${id}`;
-    // In ffmpeg.wasm we can't create directories easily, so we just prefix filenames
-    const framePrefix = `frame_${id}_`;
-    
-    const extractArgs = ['-i', inputName];
-    if (limitSeconds) {
-       extractArgs.push('-t', limitSeconds.toString());
-    }
-    extractArgs.push(`${framePrefix}%04d.png`);
-    
-    await instance.exec(extractArgs);
-    
-    const files = await instance.listDir('.');
-    const frameFiles = files
-      .filter(f => f.name.startsWith(framePrefix) && !f.isDir)
-      .map(f => f.name)
-      .sort();
-      
-    const upscaler = await getUpscaler();
-    const upscaledFrames: string[] = [];
-    
-    // 2. Process frames one by one
-    for (let i = 0; i < frameFiles.length; i++) {
-       const frameName = frameFiles[i];
-       const frameData = await instance.readFile(frameName);
-       const frameBlob = new Blob([frameData], { type: 'image/png' });
-       
-       const img = new Image();
-       img.src = URL.createObjectURL(frameBlob);
-       await new Promise((resolve) => (img.onload = resolve));
-       
-       let upscaledB64: string;
-       try {
-         upscaledB64 = await upscaler.upscale(img, {
-           patchSize: 512,
-           padding: 10
-         });
-       } catch (e: any) {
-         if (e?.message?.includes('shader') || e?.message?.includes('fragment') || e?.message?.includes('WebGL')) {
-           console.warn('Shader error detected during video frame upscale. Switching to WASM...');
-           await tf.setBackend('wasm');
-           await tf.ready();
-           upscaledB64 = await upscaler.upscale(img, {
-             patchSize: 512,
-             padding: 10
-           });
-         } else {
-           throw e;
-         }
-       }
-       
-       const upscaledRes = await fetch(upscaledB64);
-       const upscaledBlob = await upscaledRes.blob();
-       const upscaledUint8 = new Uint8Array(await upscaledBlob.arrayBuffer());
-       
-       const upscaledName = `upscaled_${frameName}`;
-       await instance.writeFile(upscaledName, upscaledUint8);
-       upscaledFrames.push(upscaledName);
-       
-       URL.revokeObjectURL(img.src);
-       await instance.deleteFile(frameName);
+    await instance.writeFile(inputName, new Uint8Array(await file.arrayBuffer()));
+    // An input-only probe returns a nonzero code but emits original stream metadata.
+    await instance.exec(['-hide_banner', '-i', inputName]);
+    const fps = parseVideoFrameRate(logs);
 
-       if (onProgress) onProgress(Math.round(((i + 1) / frameFiles.length) * 100));
-    }
-    
-    // 3. Merge frames back into video
-    const outputName = `ai_upscaled_${id}.mp4`;
-    await instance.exec([
-      '-framerate', '30', // Assume 30fps for simplicity, ideally we detect this
-      '-i', `upscaled_${framePrefix}%04d.png`,
-      '-c:v', 'libx264',
-      '-pix_fmt', 'yuv420p',
-      '-preset', 'ultrafast',
-      outputName
-    ]);
-    
-    const finalData = await instance.readFile(outputName);
-    
-    // Cleanup upscaled frames
-    for(const f of upscaledFrames) {
-        await instance.deleteFile(f);
-    }
-    await instance.deleteFile(outputName);
+    const extractCode = await instance.exec(videoFrameExtractArgs(inputName, originalPattern, fps, limitSeconds));
+    if (extractCode !== 0) throw new Error('원본 영상에서 프레임을 추출하지 못했어 (FFmpeg 코드 ' + extractCode + ').');
 
-    return new Blob([finalData], { type: 'video/mp4' });
+    const entries = await instance.listDir('.');
+    const frameNames = entries
+      .filter(entry => !entry.isDir && entry.name.startsWith(framePrefix) && entry.name.endsWith('.png'))
+      .map(entry => entry.name).sort();
+    if (!frameNames.length) throw new Error('추출된 동영상 프레임이 없어.');
+
+    for (let i = 0; i < frameNames.length; i++) {
+      const originalFrame = frameNames[i];
+      const raw = await instance.readFile(originalFrame);
+      if (typeof raw === 'string') throw new Error('프레임 바이너리를 읽지 못했어.');
+      const input = new File([new Uint8Array(raw)], originalFrame, { type: 'image/png' });
+      const upscale = await upscaleImage(input, model, (percentage) => {
+        onProgress?.(Math.round(90 * (i + percentage / 100) / frameNames.length));
+      });
+      const targetFrame = upscaledPrefix + originalFrame.slice(framePrefix.length);
+      await instance.writeFile(targetFrame, new Uint8Array(await upscale.arrayBuffer()));
+      await instance.deleteFile(originalFrame);
+    }
+
+    const args = videoFrameEncodeArgs(outputPattern, inputName, outputName, fps, frameNames.length);
+    const encodeCode = await instance.exec(args);
+    if (encodeCode !== 0) throw new Error('AI 복원 프레임을 MP4로 결합하지 못했어 (FFmpeg 코드 ' + encodeCode + ').');
+    const result = await instance.readFile(outputName);
+    if (typeof result === 'string' || !matchesMediaSignature(new Uint8Array(result), 'mp4')) {
+      throw new Error('AI 복원 결과물이 정상적인 MP4 파일이 아니야.');
+    }
+    onProgress?.(100);
+    return new Blob([new Uint8Array(result)], { type: 'video/mp4' });
   } finally {
+    instance.off('log', logHandler);
+    // Interrupted jobs must not retain hundreds of frames in the shared FFmpeg FS.
+    try {
+      const entries = await instance.listDir('.');
+      for (const item of entries) {
+        if (!item.isDir && (item.name.startsWith(framePrefix) || item.name.startsWith(upscaledPrefix))) {
+          try { await instance.deleteFile(item.name); } catch {}
+        }
+      }
+    } catch {}
+    try { await instance.deleteFile(inputName); } catch {}
+    try { await instance.deleteFile(outputName); } catch {}
     releaseFFmpeg();
   }
 }
