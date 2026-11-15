@@ -15,11 +15,11 @@ test('new ONNX models have distinct pinned sources and explicit contracts', () =
     if (model.fixedInput) assert.ok(model.externalData?.endsWith('.data'));
   }
   assert.equal(isOnnxModelId('esrgan-slim-2x'), false);
-  assert.equal(isOnnxModelId('quicksrnet-small-3x'), true);
+  assert.equal(isOnnxModelId('quicksrnet-small-4x'), true);
 });
 
 test('fixed-size mobile models generate 128x128 inputs including final partial tiles', () => {
-  const tiles = tilePlan(257, 129, 'quicksrnet-small-3x');
+  const tiles = tilePlan(257, 129, 'quicksrnet-small-4x');
   assert.equal(tiles.length, 6);
   assert.equal(tiles[0].inputWidth, 128);
   assert.equal(tiles[0].inputHeight, 128);

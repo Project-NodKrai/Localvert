@@ -14,8 +14,8 @@ const upstream = 'https://raw.githubusercontent.com/ningtoba/Browsersnip-Upscale
 const qBase = 'https://qaihub-public-assets.s3.us-west-2.amazonaws.com/qai-hub-models/models/';
 
 const models = [
-  { name: 'quicksrnet-small-3x.onnx', url: qBase + 'quicksrnetsmall/releases/v0.63.0/quicksrnetsmall-onnx-float.zip', zipped: true, dataName: 'quicksrnetsmall.data' },
-  { name: 'quicksrnet-medium-3x.onnx', url: qBase + 'quicksrnetmedium/releases/v0.63.0/quicksrnetmedium-onnx-float.zip', zipped: true, dataName: 'quicksrnetmedium.data' },
+  { name: 'quicksrnet-small-4x.onnx', url: qBase + 'quicksrnetsmall/releases/v0.63.0/quicksrnetsmall-onnx-float.zip', zipped: true, dataName: 'quicksrnetsmall.data' },
+  { name: 'quicksrnet-medium-4x.onnx', url: qBase + 'quicksrnetmedium/releases/v0.63.0/quicksrnetmedium-onnx-float.zip', zipped: true, dataName: 'quicksrnetmedium.data' },
   { name: 'realesr-general-x4v3.onnx', url: upstream + 'realesr-general-x4v3.onnx', zipped: false },
   { name: 'realesr-animevideov3.onnx', url: upstream + 'realesr-animevideov3.onnx', zipped: false },
   { name: 'realesrgan-x4plus-anime.onnx', url: upstream + 'realesrgan-x4plus-anime.onnx', zipped: false },

@@ -27,8 +27,8 @@ export const ACTIVE_MODEL_IDS = [
   'esrgan-slim-2x',
   'esrgan-medium-2x',
   'esrgan-medium-4x',
-  'quicksrnet-small-3x',
-  'quicksrnet-medium-3x',
+  'quicksrnet-small-4x',
+  'quicksrnet-medium-4x',
   'realesr-general-x4v3',
   'realesr-animevideov3',
   'realesrgan-x4plus-anime',
@@ -49,8 +49,8 @@ export type ModelRecord = {
 };
 
 export const UPSCALE_CATALOG: readonly ModelRecord[] = [
-  { id: 'quicksrnet-small-3x', name: 'QuickSRNet Small', tier: 'nano', uses: ['실사', '동영상'], scale: 3, available: true },
-  { id: 'quicksrnet-medium-3x', name: 'QuickSRNet Medium', tier: 'lite', uses: ['실사', '동영상'], scale: 3, available: true },
+  { id: 'quicksrnet-small-4x', name: 'QuickSRNet Small', tier: 'nano', uses: ['실사', '동영상'], scale: 4, available: true },
+  { id: 'quicksrnet-medium-4x', name: 'QuickSRNet Medium', tier: 'lite', uses: ['실사', '동영상'], scale: 4, available: true },
   { id: 'realesr-general-x4v3', name: 'Real-ESRGAN General x4v3', tier: 'lite', uses: ['실사', '동영상'], scale: 4, available: true },
   { id: 'realesr-animevideov3', name: 'Real-ESRGAN AnimeVideo v3', tier: 'lite', uses: ['일러스트', '애니메이션', '동영상'], scale: 4, available: true },
   { id: 'realesrgan-x4plus-anime', name: 'Real-ESRGAN Anime 6B', tier: 'pro', uses: ['일러스트', '애니메이션'], scale: 4, available: true },

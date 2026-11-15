@@ -18,7 +18,7 @@ test('preprocessing yields unit RGB NCHW with edge padding and alpha blending', 
 });
 
 test('input sizes are bounded for both fixed 128x128 and dynamic models', () => {
-  for (const id of ['quicksrnet-small-3x', 'realesr-general-x4v3'] as const) {
+  for (const id of ['quicksrnet-small-4x', 'realesr-general-x4v3'] as const) {
     const tiles = tilePlan(230, 80, id);
     assert.ok(tiles.length);
     assert.ok(tiles.every(t => t.inputWidth > t.coreWidth));

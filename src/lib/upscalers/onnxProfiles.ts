@@ -6,24 +6,24 @@
 const LOCAL_ASSETS = '/models/';
 
 export const ONNX_MODEL_PROFILES = {
-  'quicksrnet-small-3x': {
+  'quicksrnet-small-4x': {
     name: 'QuickSRNet Small',
-    scale: 3,
+    scale: 4,
     fixedInput: 128,
     core: 104,
     pad: 12,
-    source: LOCAL_ASSETS + 'quicksrnet-small-3x.onnx',
+    source: LOCAL_ASSETS + 'quicksrnet-small-4x.onnx',
     archive: false,
     externalData: 'quicksrnetsmall.data',
     license: 'BSD-3-Clause',
   },
-  'quicksrnet-medium-3x': {
+  'quicksrnet-medium-4x': {
     name: 'QuickSRNet Medium',
-    scale: 3,
+    scale: 4,
     fixedInput: 128,
     core: 104,
     pad: 12,
-    source: LOCAL_ASSETS + 'quicksrnet-medium-3x.onnx',
+    source: LOCAL_ASSETS + 'quicksrnet-medium-4x.onnx',
     archive: false,
     externalData: 'quicksrnetmedium.data',
     license: 'BSD-3-Clause',

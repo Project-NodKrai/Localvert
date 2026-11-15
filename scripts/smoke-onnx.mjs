@@ -1,8 +1,8 @@
 import { chromium } from 'playwright';
 
 const models = [
-  ['quicksrnet-small-3x', 3],
-  ['quicksrnet-medium-3x', 3],
+  ['quicksrnet-small-4x', 4],
+  ['quicksrnet-medium-4x', 4],
   ['realesr-general-x4v3', 4],
   ['realesr-animevideov3', 4],
   ['realesrgan-x4plus-anime', 4],
