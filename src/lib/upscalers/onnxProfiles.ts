@@ -3,10 +3,7 @@
  * Model binaries are fetched lazily and inferred locally on the user's device.
  * The CDN requests contain model URLs only; user images are never transmitted.
  */
-const BROWSERSNIP_COMMIT = '8e7094416ad91ec7477e968d348cd78742e20dc6';
-const MODELS_ROOT = 'https://cdn.jsdelivr.net/gh/ningtoba/Browsersnip-Upscale@' +
-  BROWSERSNIP_COMMIT + '/public/models/';
-const QA_RELEASE = 'https://qaihub-public-assets.s3.us-west-2.amazonaws.com/qai-hub-models/models/';
+const LOCAL_ASSETS = '/models/';
 
 export const ONNX_MODEL_PROFILES = {
   'quicksrnet-small-3x': {
@@ -15,8 +12,8 @@ export const ONNX_MODEL_PROFILES = {
     fixedInput: 128,
     core: 104,
     pad: 12,
-    source: QA_RELEASE + 'quicksrnetsmall/releases/v0.63.0/quicksrnetsmall-onnx-float.zip',
-    archive: true,
+    source: LOCAL_ASSETS + 'quicksrnet-small-3x.onnx',
+    archive: false,
     license: 'BSD-3-Clause',
   },
   'quicksrnet-medium-3x': {
@@ -25,8 +22,8 @@ export const ONNX_MODEL_PROFILES = {
     fixedInput: 128,
     core: 104,
     pad: 12,
-    source: QA_RELEASE + 'quicksrnetmedium/releases/v0.63.0/quicksrnetmedium-onnx-float.zip',
-    archive: true,
+    source: LOCAL_ASSETS + 'quicksrnet-medium-3x.onnx',
+    archive: false,
     license: 'BSD-3-Clause',
   },
   'realesr-general-x4v3': {
@@ -35,7 +32,7 @@ export const ONNX_MODEL_PROFILES = {
     fixedInput: null,
     core: 64,
     pad: 12,
-    source: MODELS_ROOT + 'realesr-general-x4v3.onnx',
+    source: LOCAL_ASSETS + 'realesr-general-x4v3.onnx',
     archive: false,
     license: 'BSD-3-Clause',
   },
@@ -45,7 +42,7 @@ export const ONNX_MODEL_PROFILES = {
     fixedInput: null,
     core: 64,
     pad: 12,
-    source: MODELS_ROOT + 'realesr-animevideov3.onnx',
+    source: LOCAL_ASSETS + 'realesr-animevideov3.onnx',
     archive: false,
     license: 'BSD-3-Clause',
   },
@@ -55,7 +52,7 @@ export const ONNX_MODEL_PROFILES = {
     fixedInput: null,
     core: 48,
     pad: 12,
-    source: MODELS_ROOT + 'realesrgan-x4plus-anime.onnx',
+    source: LOCAL_ASSETS + 'realesrgan-x4plus-anime.onnx',
     archive: false,
     license: 'BSD-3-Clause',
   },

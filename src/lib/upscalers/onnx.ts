@@ -54,7 +54,7 @@ async function getRuntime(): Promise<OrtRuntime> {
 
 async function fetchModel(id: OnnxModelId): Promise<ArrayBuffer> {
   const profile = ONNX_MODEL_PROFILES[id];
-  const response = await fetch(profile.source, { mode: 'cors' });
+  const response = await fetch(profile.source, { mode: 'same-origin' });
   if (!response.ok) throw new Error(profile.name + ' 모델 파일 다운로드 실패 (' + response.status + ')');
   const bytes = await response.arrayBuffer();
   if (!bytes.byteLength) throw new Error(profile.name + ' 모델 파일이 비어 있어.');
