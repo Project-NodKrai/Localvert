@@ -84,7 +84,7 @@ export function adviseImageUpscale(
     recommendedSystemRamGB: selected.tier === 'plus' ? 32 : selected.tier === 'standard' ? 24 : 8,
     inputMegapixels,
     outputMegapixels,
-    estimatedOutputRGBABytes: pixels * 4 * 4,
+    estimatedOutputRGBABytes: pixels * factor * factor * 4,
     patchSize,
     warnings,
     caution: warnings.length > 0,
