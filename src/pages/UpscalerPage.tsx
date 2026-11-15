@@ -225,7 +225,7 @@ export default function UpscalerPage() {
       </main>
       {snackbar && typeof document !== 'undefined' && createPortal(
         <div role="alert" aria-live="assertive"
-          className="fixed bottom-4 left-1/2 z-[100] w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 rounded-2xl border border-amber-700/40 bg-neutral-900 p-4 text-white shadow-2xl sm:bottom-8"
+          className={`fixed left-1/2 z-[100] w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 rounded-2xl border border-amber-700/40 bg-neutral-900 p-4 text-white shadow-2xl ${snackbar.kind === 'notice' ? 'top-4 sm:top-6' : 'bottom-4 sm:bottom-8'}`}
         >
           <div className="flex items-start gap-3">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" aria-hidden="true" />
