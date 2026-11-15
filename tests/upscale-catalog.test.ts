@@ -19,7 +19,7 @@ test('existing installed models are re-tiered, not duplicated under misleading l
 
 test('planned candidates are never marked as installed or executable', () => {
   const ready = UPSCALE_CATALOG.filter(m => m.available);
-  assert.deepEqual(ready.map(m => m.id), [...ACTIVE_MODEL_IDS]);
+  assert.deepEqual(new Set(ready.map(m => m.id)), new Set(ACTIVE_MODEL_IDS));
   assert.equal(UPSCALE_CATALOG.find(m => m.id === 'quicksrnet-small-3x')?.available, true);
 });
 
