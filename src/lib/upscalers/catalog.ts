@@ -45,10 +45,10 @@ export type ModelRecord = {
 
 export const UPSCALE_CATALOG: readonly ModelRecord[] = [
   { id: 'quicksrnet-small-3x', name: 'QuickSRNet Small', tier: 'nano', uses: ['실사', '동영상'], scale: 3, available: false, note: 'ONNX 가중치 확인 · 브라우저 추론 엔진 이식 대기' },
-  { id: 'esrgan-slim-2x', name: 'ESRGAN Slim', tier: 'lite', uses: ['실사', '일러스트'], scale: 2, available: true, note: '기존 Standard 모델 재분류 · WebGL/WASM/CPU' },
+  { id: 'esrgan-slim-2x', name: 'ESRGAN Slim', tier: 'standard', uses: ['실사', '일러스트'], scale: 2, available: true, note: '기존 Standard · 처리 부담이 커 Standard 이상으로 임시 재분류 · 실측 필요' },
   { id: 'span-f', name: 'SPAN-F', tier: 'lite', uses: ['실사', '일러스트'], scale: null, available: false, note: '브라우저 실행 및 가중치 검증 대기' },
-  { id: 'esrgan-medium-2x', name: 'ESRGAN Medium', tier: 'standard', uses: ['실사', '일러스트'], scale: 2, available: true, note: '기존 Ultra 모델 재분류 · WebGL/WASM/CPU' },
-  { id: 'esrgan-medium-4x', name: 'ESRGAN Medium 4×', tier: 'plus', uses: ['실사', '일러스트'], scale: 4, available: true, note: '공식 4배 가중치 · 출력 픽셀 수 16배' },
+  { id: 'esrgan-medium-2x', name: 'ESRGAN Medium', tier: 'plus', uses: ['실사', '일러스트'], scale: 2, available: true, note: '기존 Ultra · 모델 연산량 실측 전 Plus 임시 배치' },
+  { id: 'esrgan-medium-4x', name: 'ESRGAN Medium 4×', tier: 'max', uses: ['실사', '일러스트'], scale: 4, available: true, note: '공식 4배 가중치 · 출력 픽셀 수 16배 · Max 임시 배치' },
   { id: 'realplksr-2x', name: 'RealPLKSR', tier: 'plus', uses: ['실사', '일러스트'], scale: 2, available: false, note: 'ONNX 변환 및 성능 검증 대기' },
   { id: 'drct', name: 'DRCT', tier: 'pro', uses: ['실사', '일러스트'], scale: null, available: false, note: '브라우저 가중치 이식 대기' },
   { id: 'adcsr', name: 'AdcSR', tier: 'pro', uses: ['실사'], scale: null, available: false, note: '브라우저 이식 대기' },

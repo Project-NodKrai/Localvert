@@ -10,9 +10,9 @@ test('all nine requested tiers are ordered, including Ultra Plus and Reference',
 });
 
 test('existing installed models are re-tiered, not duplicated under misleading labels', () => {
-  assert.equal(activeModel('standard').tier, 'lite');
-  assert.equal(activeModel('ultra').tier, 'standard');
-  assert.equal(activeModel('esrgan-medium-4x').tier, 'plus');
+  assert.equal(activeModel('standard').tier, 'standard');
+  assert.equal(activeModel('ultra').tier, 'plus');
+  assert.equal(activeModel('esrgan-medium-4x').tier, 'max');
   assert.equal(normalizeModelId('ultra'), 'esrgan-medium-2x');
   assert.equal(ACTIVE_MODEL_IDS.length, 3);
 });

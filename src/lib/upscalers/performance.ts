@@ -59,7 +59,7 @@ export function adviseImageUpscale(
   const outputMegapixels = inputMegapixels * factor * factor;
   const warnings: string[] = [];
   // Conservative initial values; these are guidance, not benchmark measurements.
-  const recommendationLimit = selected.tier === 'plus' ? 2 : selected.tier === 'standard' ? 8 : 12;
+  const recommendationLimit = selected.tier === 'max' ? 2 : selected.tier === 'plus' ? 6 : selected.tier === 'standard' ? 8 : 12;
 
   if (inputMegapixels > recommendationLimit) {
     warnings.push('입력 이미지가 ' + recommendationLimit + 'MP 권장 범위를 넘어 처리 시간과 메모리 사용량이 크게 늘어날 수 있어.');
@@ -77,11 +77,11 @@ export function adviseImageUpscale(
   const constrained = inputMegapixels > recommendationLimit ||
     (hints.memoryHintGB !== undefined && hints.memoryHintGB <= 4) ||
     hints.webglAvailable === false;
-  const defaultPatch = selected.tier === 'plus' ? 64 : selected.tier === 'standard' ? 128 : 256;
+  const defaultPatch = selected.tier === 'max' ? 64 : selected.tier === 'plus' ? 96 : selected.tier === 'standard' ? 128 : 256;
   const patchSize = constrained ? Math.max(32, defaultPatch / 2) : defaultPatch;
 
   return {
-    recommendedSystemRamGB: selected.tier === 'plus' ? 32 : selected.tier === 'standard' ? 24 : 8,
+    recommendedSystemRamGB: selected.tier === 'max' ? 32 : selected.tier === 'plus' ? 24 : selected.tier === 'standard' ? 16 : 8,
     inputMegapixels,
     outputMegapixels,
     estimatedOutputRGBABytes: pixels * factor * factor * 4,
