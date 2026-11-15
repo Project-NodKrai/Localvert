@@ -104,5 +104,5 @@ export function validateTensorShape(
   const h = tile.inputHeight * scale;
   if (dims.length === 4 && dims[0] === 1 && dims[1] === 3 && dims[2] === h && dims[3] === w) return 'chw';
   if (dims.length === 4 && dims[0] === 1 && dims[1] === h && dims[2] === w && dims[3] === 3) return 'hwc';
-  throw new Error('모델 출력 텐서의 크기가 예상한 ' + w + '×' + h + ' 이미지와 달라.');
+  throw new Error('모델 출력 텐서의 크기가 예상한 ' + w + '×' + h + ' 이미지와 달라. 실제 dims=' + JSON.stringify(dims));
 }
