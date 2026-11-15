@@ -4,14 +4,14 @@ import { ONNX_MODEL_PROFILES, tilePlan, validateTensorShape, isOnnxModelId } fro
 
 test('new ONNX models have distinct pinned sources and explicit contracts', () => {
   const models = Object.values(ONNX_MODEL_PROFILES);
-  assert.equal(models.length, 5);
+  assert.equal(models.length, 12);
   assert.equal(new Set(models.map(m => m.source)).size, models.length);
   for (const model of models) {
     assert.ok(model.scale === 4);
     assert.ok(model.core >= 32);
     assert.ok(model.pad >= 8);
     assert.ok(model.source.startsWith('/models/'));
-    assert.equal(model.license, 'BSD-3-Clause');
+    assert.ok(['BSD-3-Clause', 'Apache-2.0', 'CC-BY-4.0'].includes(model.license));
     if (model.fixedInput) assert.ok(model.externalData?.endsWith('.data'));
   }
   assert.equal(isOnnxModelId('esrgan-slim-2x'), false);

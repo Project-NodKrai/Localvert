@@ -6,8 +6,16 @@ const models = [
   ['realesr-general-x4v3', 4],
   ['realesr-animevideov3', 4],
   ['realesrgan-x4plus-anime', 4],
+  ['realesrgan-x4plus', 4],
+  ['realesrgan-anime-4b32f', 4],
+  ['swin2sr-lightweight-2x', 2],
+  ['swin2sr-classical-4x', 4],
+  ['swin2sr-realworld-4x', 4],
+  ['swin2sr-compressed-4x', 4],
+  ['realcugan-hfa2k-2x', 2],
 ];
 
+// Allow extra time on CPU for transformer and RRDB models.
 const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
 const page = await browser.newPage();
 page.on('console', msg => { if (msg.type() === 'error') console.error('[browser]', msg.text()); });
@@ -16,6 +24,7 @@ page.on('pageerror', err => console.error('[pageerror]', err.message));
 try {
   await page.goto('http://127.0.0.1:3000/upscale', { waitUntil: 'domcontentloaded', timeout: 30000 });
   for (const [id, scale] of models) {
+    page.setDefaultTimeout(120_000);
     console.log('Smoke-checking ONNX model:', id);
     const result = await page.evaluate(async ({ modelId, expectedScale }) => {
       try {

@@ -19,6 +19,13 @@ const models = [
   { name: 'realesr-general-x4v3.onnx', url: upstream + 'realesr-general-x4v3.onnx', zipped: false },
   { name: 'realesr-animevideov3.onnx', url: upstream + 'realesr-animevideov3.onnx', zipped: false },
   { name: 'realesrgan-x4plus-anime.onnx', url: upstream + 'realesrgan-x4plus-anime.onnx', zipped: false },
+  { name: 'realesrgan-x4plus.onnx', url: 'https://huggingface.co/SceneWorks/real-esrgan-onnx/resolve/main/real_esrgan_x4.onnx', zipped: false },
+  { name: 'realesrgan-anime-4b32f.onnx', url: 'https://huggingface.co/deepghs/imgutils-models/resolve/main/real_esrgan/RealESRGAN_x4plus_anime_4B32F.onnx', zipped: false },
+  { name: 'swin2sr-lightweight-2x.onnx', url: 'https://huggingface.co/Xenova/swin2SR-lightweight-x2-64/resolve/main/onnx/model.onnx', zipped: false },
+  { name: 'swin2sr-classical-4x.onnx', url: 'https://huggingface.co/Xenova/swin2SR-classical-sr-x4-64/resolve/main/onnx/model.onnx', zipped: false },
+  { name: 'swin2sr-realworld-4x.onnx', url: 'https://huggingface.co/Xenova/swin2SR-realworld-sr-x4-64-bsrgan-psnr/resolve/main/onnx/model.onnx', zipped: false },
+  { name: 'swin2sr-compressed-4x.onnx', url: 'https://huggingface.co/Xenova/swin2SR-compressed-sr-x4-48/resolve/main/onnx/model.onnx', zipped: false },
+  { name: 'realcugan-hfa2k-2x.onnx', url: 'https://huggingface.co/nesaorg/2xHFA2kReal-CUGAN_fp32_opset17/resolve/main/2xHFA2kReal-CUGAN_fp32_opset17.onnx', zipped: false },
 ];
 
 async function download(source) {

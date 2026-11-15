@@ -15,3 +15,11 @@ Upstream sources:
 - https://github.com/ningtoba/Browsersnip-Upscale
 
 The original weights and source models must retain required BSD attribution in any downstream redistribution.
+
+## Additional ONNX models
+- Real-ESRGAN x4plus (4×), Hugging Face SceneWorks ONNX export, original BSD-3-Clause, Xintao Wang
+- Real-ESRGAN Anime 4B32F (4×), Hugging Face deepghs ONNX export, original BSD-3-Clause
+- Swin2SR Lightweight (2×), Classical (4×), RealWorld (4×), Compressed (4×), Xenova ONNX exports; original Swin2SR source Apache-2.0 (Marcos V. Conde et al.)
+- Real-CUGAN HFA2k (2×), nesaorg ONNX conversion of Philip Hofmann's weights (CC BY 4.0); attribution required
+
+Original weights and redistributions must retain the relevant attribution and license terms.

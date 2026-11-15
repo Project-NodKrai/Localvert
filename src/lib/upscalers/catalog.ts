@@ -32,6 +32,13 @@ export const ACTIVE_MODEL_IDS = [
   'realesr-general-x4v3',
   'realesr-animevideov3',
   'realesrgan-x4plus-anime',
+  'realesrgan-x4plus',
+  'realesrgan-anime-4b32f',
+  'swin2sr-lightweight-2x',
+  'swin2sr-classical-4x',
+  'swin2sr-realworld-4x',
+  'swin2sr-compressed-4x',
+  'realcugan-hfa2k-2x',
 ] as const;
 
 export type ActiveUpscaleModelId = (typeof ACTIVE_MODEL_IDS)[number];
@@ -54,6 +61,13 @@ export const UPSCALE_CATALOG: readonly ModelRecord[] = [
   { id: 'realesr-general-x4v3', name: 'Real-ESRGAN General x4v3', tier: 'lite', uses: ['실사', '동영상'], scale: 4, available: true },
   { id: 'realesr-animevideov3', name: 'Real-ESRGAN AnimeVideo v3', tier: 'lite', uses: ['일러스트', '애니메이션', '동영상'], scale: 4, available: true },
   { id: 'realesrgan-x4plus-anime', name: 'Real-ESRGAN Anime 6B', tier: 'pro', uses: ['일러스트', '애니메이션'], scale: 4, available: true },
+  { id: 'realesrgan-x4plus', name: 'Real-ESRGAN x4plus', tier: 'pro', uses: ['실사', '동영상'], scale: 4, available: true },
+  { id: 'realesrgan-anime-4b32f', name: 'Real-ESRGAN Anime 4B32F', tier: 'plus', uses: ['일러스트', '애니메이션'], scale: 4, available: true },
+  { id: 'swin2sr-lightweight-2x', name: 'Swin2SR Lightweight', tier: 'standard', uses: ['실사', '일러스트'], scale: 2, available: true },
+  { id: 'swin2sr-classical-4x', name: 'Swin2SR Classical', tier: 'pro', uses: ['실사', '일러스트'], scale: 4, available: true },
+  { id: 'swin2sr-realworld-4x', name: 'Swin2SR RealWorld', tier: 'pro', uses: ['실사'], scale: 4, available: true },
+  { id: 'swin2sr-compressed-4x', name: 'Swin2SR Compressed', tier: 'pro', uses: ['실사'], scale: 4, available: true },
+  { id: 'realcugan-hfa2k-2x', name: 'Real-CUGAN HFA2k', tier: 'plus', uses: ['일러스트', '애니메이션'], scale: 2, available: true },
   { id: 'esrgan-slim-2x', name: 'ESRGAN Slim', tier: 'standard', uses: ['실사', '일러스트'], scale: 2, available: true },
   { id: 'span-f', name: 'SPAN-F', tier: 'lite', uses: ['실사', '일러스트'], scale: null, available: false },
   { id: 'esrgan-medium-2x', name: 'ESRGAN Medium', tier: 'plus', uses: ['실사', '일러스트'], scale: 2, available: true },
