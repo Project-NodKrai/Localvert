@@ -4,14 +4,14 @@ import { ONNX_MODEL_PROFILES, tilePlan, validateTensorShape, isOnnxModelId } fro
 
 test('new ONNX models have distinct pinned sources and explicit contracts', () => {
   const models = Object.values(ONNX_MODEL_PROFILES);
-  assert.equal(models.length, 18);
+  assert.equal(models.length, 20);
   assert.equal(new Set(models.map(m => m.source)).size, models.length);
   for (const model of models) {
     assert.ok(model.scale === 2 || model.scale === 4);
     assert.ok(model.core >= 32);
     assert.ok(model.pad >= 8);
     assert.ok(model.source.startsWith('/models/'));
-    assert.ok(['BSD-3-Clause', 'Apache-2.0', 'CC-BY-4.0', 'MIT'].includes(model.license));
+    assert.ok(['BSD-3-Clause', 'Apache-2.0', 'CC-BY-4.0', 'CC-BY-SA-4.0', 'MIT'].includes(model.license));
     if (model.externalData) assert.ok(model.externalData.endsWith('.data'));
   }
   assert.equal(isOnnxModelId('esrgan-slim-2x'), false);
@@ -60,5 +60,13 @@ test('lightweight SPAN photo and animation profiles have actual ONNX output cont
     assert.equal(plan[0].inputWidth, 51);
     assert.equal(plan[0].inputHeight, 35);
     assert.equal(validateTensorShape([1, 3, 70, 102], plan[0], 2), 'chw');
+  }
+});
+
+test('SPAN/MoSR 4x profiles use separate RGB input/output contracts', () => {
+  for (const id of ['purephoto-span-4x', 'nomos2-hq-mosr-4x'] as const) {
+    const [tile] = tilePlan(5, 3, id);
+    assert.ok(tile.inputWidth >= 24);
+    assert.equal(validateTensorShape([1, 3, tile.inputHeight * 4, tile.inputWidth * 4], tile, 4), 'chw');
   }
 });
