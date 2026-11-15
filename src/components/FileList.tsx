@@ -131,14 +131,6 @@ export default function FileList({
                         <span className="text-xs text-red-500 font-mono font-bold">
                           {((task as UpscaleTask).type === 'image' || ((task as UpscaleTask).type === 'video' && (task as UpscaleTask).videoMethod === 'ai')) ? modelDisplayName((task as UpscaleTask).model) : (task as UpscaleTask).videoMethod.toUpperCase()}
                         </span>
-                        {(task as UpscaleTask).width && (task as UpscaleTask).width! > 4000 && (
-                          <div className="group relative">
-                            <span className="text-[9px] bg-yellow-500/20 text-yellow-500 px-1 rounded animate-pulse cursor-help">GPU Warn</span>
-                            <div className="absolute bottom-full right-0 mb-2 w-48 p-2 bg-neutral-900 border border-neutral-700 rounded-lg text-[10px] text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 shadow-2xl leading-tight">
-                              출력 해상도가 16384px에 근접합니다. GPU 메모리 보호를 위해 <span className="text-yellow-500 font-bold">자동 분할 처리(Tiling)</span> 모드가 활성화됩니다.
-                            </div>
-                          </div>
-                        )}
                       </div>
                     )}
                     {(task.mode === 'compress' || task.mode === 'upscale') && (
