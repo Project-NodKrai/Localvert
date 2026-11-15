@@ -49,7 +49,7 @@ test('purpose filters only compatible model candidates within the chosen tier', 
 
 test('unavailable tier or purpose never silently selects a different executable model', () => {
   assert.equal(runnableModelForTierPurpose('nano', '실사'), 'quicksrnet-small-4x');
-  assert.equal(runnableModelForTierPurpose('lite', '일러스트'), 'modernspanimation-2x');
+  assert.equal(runnableModelForTierPurpose('lite', '일러스트'), 'anime4k-v4-m-2x');
   assert.equal(runnableModelForTierPurpose('max', '동영상'), null);
   assert.equal(runnableModelForTierPurpose('plus', '애니메이션'), 'realesrgan-anime-4b32f');
   assert.equal(isRunnableSelection('esrgan-slim-2x', 'nano', '실사'), false);
