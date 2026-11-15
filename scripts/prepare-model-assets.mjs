@@ -14,8 +14,8 @@ const upstream = 'https://raw.githubusercontent.com/ningtoba/Browsersnip-Upscale
 const qBase = 'https://qaihub-public-assets.s3.us-west-2.amazonaws.com/qai-hub-models/models/';
 
 const models = [
-  { name: 'quicksrnet-small-3x.onnx', url: qBase + 'quicksrnetsmall/releases/v0.63.0/quicksrnetsmall-onnx-float.zip', zipped: true },
-  { name: 'quicksrnet-medium-3x.onnx', url: qBase + 'quicksrnetmedium/releases/v0.63.0/quicksrnetmedium-onnx-float.zip', zipped: true },
+  { name: 'quicksrnet-small-3x.onnx', url: qBase + 'quicksrnetsmall/releases/v0.63.0/quicksrnetsmall-onnx-float.zip', zipped: true, dataName: 'quicksrnetsmall.data' },
+  { name: 'quicksrnet-medium-3x.onnx', url: qBase + 'quicksrnetmedium/releases/v0.63.0/quicksrnetmedium-onnx-float.zip', zipped: true, dataName: 'quicksrnetmedium.data' },
   { name: 'realesr-general-x4v3.onnx', url: upstream + 'realesr-general-x4v3.onnx', zipped: false },
   { name: 'realesr-animevideov3.onnx', url: upstream + 'realesr-animevideov3.onnx', zipped: false },
   { name: 'realesrgan-x4plus-anime.onnx', url: upstream + 'realesrgan-x4plus-anime.onnx', zipped: false },
@@ -34,7 +34,12 @@ for (const spec of models) {
   const destination = join(outputDir, spec.name);
   try {
     const existing = await stat(destination);
-    if (existing.size > 1000) {
+    let dataReady = true;
+    if (spec.dataName) {
+      try { dataReady = (await stat(join(outputDir, spec.dataName))).size > 1000; }
+      catch { dataReady = false; }
+    }
+    if (existing.size > 1000 && dataReady) {
       console.log('[model assets] cached:', spec.name, existing.size, 'bytes');
       continue;
     }
@@ -48,6 +53,17 @@ for (const spec of models) {
     const onnx = Object.values(archive.files).filter(f => !f.dir && f.name.endsWith('.onnx'));
     if (onnx.length !== 1) throw new Error(spec.name + ': expected one ONNX file, found ' + onnx.length);
     result = await onnx[0].async('uint8array');
+    if (spec.dataName) {
+      const extras = Object.values(archive.files).filter(f => !f.dir && f.name.endsWith('.data'));
+      const external = extras.find(f => f.name.split('/').at(-1) === spec.dataName);
+      if (!external) {
+        throw new Error(spec.name + ': missing referenced external weight file ' + spec.dataName);
+      }
+      const externalBytes = await external.async('uint8array');
+      if (!externalBytes.byteLength) throw new Error(spec.name + ': empty external data');
+      await writeFile(join(outputDir, spec.dataName), externalBytes);
+      console.log('[model assets] external weights:', spec.dataName, externalBytes.byteLength, 'bytes');
+    }
   }
   if (result.byteLength < 1000) throw new Error(spec.name + ': extracted ONNX is too small');
   const tmp = destination + '.tmp';

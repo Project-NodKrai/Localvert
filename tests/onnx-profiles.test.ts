@@ -12,6 +12,7 @@ test('new ONNX models have distinct pinned sources and explicit contracts', () =
     assert.ok(model.pad >= 8);
     assert.ok(model.source.startsWith('/models/'));
     assert.equal(model.license, 'BSD-3-Clause');
+    if (model.fixedInput) assert.ok(model.externalData?.endsWith('.data'));
   }
   assert.equal(isOnnxModelId('esrgan-slim-2x'), false);
   assert.equal(isOnnxModelId('quicksrnet-small-3x'), true);

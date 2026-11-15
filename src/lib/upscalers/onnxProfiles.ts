@@ -14,6 +14,7 @@ export const ONNX_MODEL_PROFILES = {
     pad: 12,
     source: LOCAL_ASSETS + 'quicksrnet-small-3x.onnx',
     archive: false,
+    externalData: 'quicksrnetsmall.data',
     license: 'BSD-3-Clause',
   },
   'quicksrnet-medium-3x': {
@@ -24,6 +25,7 @@ export const ONNX_MODEL_PROFILES = {
     pad: 12,
     source: LOCAL_ASSETS + 'quicksrnet-medium-3x.onnx',
     archive: false,
+    externalData: 'quicksrnetmedium.data',
     license: 'BSD-3-Clause',
   },
   'realesr-general-x4v3': {
@@ -34,6 +36,7 @@ export const ONNX_MODEL_PROFILES = {
     pad: 12,
     source: LOCAL_ASSETS + 'realesr-general-x4v3.onnx',
     archive: false,
+    externalData: null,
     license: 'BSD-3-Clause',
   },
   'realesr-animevideov3': {
@@ -44,6 +47,7 @@ export const ONNX_MODEL_PROFILES = {
     pad: 12,
     source: LOCAL_ASSETS + 'realesr-animevideov3.onnx',
     archive: false,
+    externalData: null,
     license: 'BSD-3-Clause',
   },
   'realesrgan-x4plus-anime': {
@@ -54,6 +58,7 @@ export const ONNX_MODEL_PROFILES = {
     pad: 12,
     source: LOCAL_ASSETS + 'realesrgan-x4plus-anime.onnx',
     archive: false,
+    externalData: null,
     license: 'BSD-3-Clause',
   },
 } as const;

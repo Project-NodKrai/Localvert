@@ -72,10 +72,14 @@ async function sessionFor(id: OnnxModelId): Promise<OrtSession> {
   if (!pending) {
     pending = (async () => {
       const [ort, weights] = await Promise.all([getRuntime(), fetchModel(id)]);
+      const externalData = ONNX_MODEL_PROFILES[id].externalData;
       return ort.InferenceSession.create(weights, {
         executionProviders: ['wasm'],
         graphOptimizationLevel: 'all',
         intraOpNumThreads: 1,
+        ...(externalData ? {
+          externalData: [{ path: externalData, data: '/models/' + externalData }],
+        } : {}),
       });
     })().catch(error => {
       sessions.delete(id);
