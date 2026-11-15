@@ -33,6 +33,7 @@ export type ActiveUpscaleModelId = (typeof ACTIVE_MODEL_IDS)[number];
 /** Old saved tasks can still refer to the names that were used before tiering. */
 export type UpscaleModelSelection = ActiveUpscaleModelId | 'standard' | 'ultra';
 export type UpscaleUse = '실사' | '일러스트' | '애니메이션' | '동영상';
+export const UPSCALE_PURPOSES: readonly UpscaleUse[] = ['실사', '일러스트', '애니메이션', '동영상'];
 export type ModelRecord = {
   id: string;
   name: string;
@@ -81,4 +82,26 @@ export function activeModel(selected: UpscaleModelSelection): ModelRecord {
 export function modelDisplayName(selected: UpscaleModelSelection): string {
   const model = activeModel(selected);
   return TIER_LABELS[model.tier] + ' · ' + model.name + ' ' + model.scale + '×';
+}
+
+/** Only models already wired into an executable browser backend can be selected. */
+export function modelsForTierPurpose(tier: UpscaleTier, purpose: UpscaleUse): ModelRecord[] {
+  return UPSCALE_CATALOG.filter(model => model.tier === tier && model.uses.includes(purpose));
+}
+
+export function runnableModelForTierPurpose(tier: UpscaleTier, purpose: UpscaleUse): ActiveUpscaleModelId | null {
+  const model = modelsForTierPurpose(tier, purpose).find(entry => entry.available);
+  return model && ACTIVE_MODEL_IDS.includes(model.id as ActiveUpscaleModelId)
+    ? model.id as ActiveUpscaleModelId : null;
+}
+
+export function isRunnableSelection(
+  selection: UpscaleModelSelection, tier: UpscaleTier, purpose: UpscaleUse
+): boolean {
+  const modelId = normalizeModelId(selection);
+  return modelsForTierPurpose(tier, purpose).some(entry => entry.available && entry.id === modelId);
+}
+
+export function tierPurposeLabel(tier: UpscaleTier, purpose: UpscaleUse): string {
+  return TIER_LABELS[tier] + ' (' + purpose + ')';
 }
