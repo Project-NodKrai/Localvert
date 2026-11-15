@@ -92,7 +92,7 @@ export default function TierPurposeSelector({ task, onUpdate }: Props) {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="fixed inset-0 z-[80] flex items-end justify-center bg-black/60 backdrop-blur-sm"
-              onMouseDown={event => {
+              onClick={event => {
                 if (event.target === event.currentTarget) setOpen(false);
               }}
             >
