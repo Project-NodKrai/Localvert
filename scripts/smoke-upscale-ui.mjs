@@ -15,22 +15,28 @@ try {
   // Workspaces mount only after the asynchronous IndexedDB initialization.
   await page.locator('input[type="file"]').first().waitFor({ state: 'attached', timeout: 25000 });
 
-  await page.evaluate(async () => {
+  const pixels = await page.evaluate(async () => {
     const canvas = document.createElement('canvas');
     canvas.width = 24;
     canvas.height = 16;
     const blob = await new Promise((resolve, reject) => {
       canvas.toBlob(value => value ? resolve(value) : reject(new Error('PNG encoder unavailable')), 'image/png');
     });
-    const input = document.querySelector('input[type="file"]');
-    if (!input) throw new Error('Missing image upload input');
-    const items = new DataTransfer();
-    items.items.add(new File([blob], 'smoke.png', { type: 'image/png' }));
-    Object.defineProperty(input, 'files', { configurable: true, value: items.files });
-    input.dispatchEvent(new Event('change', { bubbles: true }));
+    return Array.from(new Uint8Array(await blob.arrayBuffer()));
   });
+  // Use a genuine browser file input event; assigning input.files by hand
+  // does not reliably trigger React's file-change handling.
+  await page.locator('input[type="file"]').first().setInputFiles({
+    name: 'smoke.png', mimeType: 'image/png', buffer: Buffer.from(pixels),
+  });
+  try {
+    await page.getByTitle('설정').waitFor({ state: 'visible', timeout: 20000 });
+  } catch (error) {
+    console.error('UI upload state:', (await page.locator('body').innerText()).slice(0, 3000));
+    console.error('Browser exceptions:', errors);
+    throw error;
+  }
 
-  await page.getByTitle('설정').waitFor({ state: 'visible', timeout: 20000 });
   await page.getByTitle('설정').click();
 
   const trigger = page.getByRole('button', { name: /Standard \(실사\)/ });
