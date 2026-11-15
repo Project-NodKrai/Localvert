@@ -50,25 +50,128 @@ export default function AdvancedSettings({ task, onUpdate, onClose }: AdvancedSe
 
         <div className="p-8 space-y-8 max-h-[70vh] overflow-y-auto">
           {isCompress && (
-             <section className="space-y-4">
-               <div className="flex justify-between items-center">
-                 <label className="text-sm font-medium text-neutral-300">압축 강도 (품질)</label>
-                 <span className="text-sm font-mono text-red-500 font-bold">{(task as CompressTask).quality}%</span>
-               </div>
-               <input
-                 type="range"
-                 min="10"
-                 max="100"
-                 step="5"
-                 value={(task as CompressTask).quality}
-                 onChange={(e) => onUpdate({ quality: parseInt(e.target.value) })}
-                 className="w-full h-2 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-red-500 hover:accent-red-400 transition-all"
-               />
-               <div className="flex justify-between text-[10px] text-neutral-600 font-mono">
-                 <span>최대 압축 (저화질)</span>
-                 <span>최소 압축 (고화질)</span>
-               </div>
-             </section>
+            <section className="space-y-5">
+              <div className="flex gap-2 rounded-xl bg-neutral-800 p-1">
+                <button type="button"
+                  onClick={() => onUpdate({ settings: { ...(task as CompressTask).settings, mode: 'simple' } })}
+                  className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors ${(task as CompressTask).settings.mode !== 'advanced' ? 'bg-red-600 text-white' : 'text-neutral-400 hover:text-white'}`}>
+                  일반
+                </button>
+                <button type="button"
+                  onClick={() => onUpdate({ settings: { ...(task as CompressTask).settings, mode: 'advanced' } })}
+                  className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors ${(task as CompressTask).settings.mode === 'advanced' ? 'bg-red-600 text-white' : 'text-neutral-400 hover:text-white'}`}>
+                  고급
+                </button>
+              </div>
+              {(task as CompressTask).settings.mode !== 'advanced' && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <label htmlFor="compression-strength" className="font-medium">압축 강도</label>
+                    <span className="font-mono text-red-400">{(task as CompressTask).quality}%</span>
+                  </div>
+                  <input id="compression-strength" type="range" min="0" max="100" step="5"
+                    value={(task as CompressTask).quality}
+                    onChange={(e) => onUpdate({ quality: Number(e.target.value) })}
+                    className="w-full accent-red-500" />
+                  <div className="flex justify-between text-xs text-neutral-400">
+                    <span>약하게 · 화질 우선</span><span>강하게 · 용량 우선</span>
+                  </div>
+                  <p className="text-xs text-neutral-500">일반 모드는 화질과 파일 크기를 자동으로 조정해. 원본에 따라 압축률은 달라져.</p>
+                </div>
+              )}
+              {(task as CompressTask).settings.mode === 'advanced' && (
+                <div className="space-y-4">
+                  {isImage && (
+                    <>
+                      <label className="block space-y-2 text-sm">
+                        <span>출력 형식</span>
+                        <select className="w-full rounded-lg border border-neutral-700 bg-neutral-800 p-2.5"
+                          value={(task as CompressTask).settings.imageFormat || 'original'}
+                          onChange={e => onUpdate({ settings: { ...(task as CompressTask).settings, imageFormat: e.target.value as 'original' | 'jpeg' | 'webp' | 'png' } })}>
+                          <option value="original">원본 형식 유지 (지원 형식 외 WebP)</option>
+                          <option value="jpeg">JPEG · 사진용</option>
+                          <option value="webp">WebP · 웹용</option>
+                          <option value="png">PNG · 무손실 픽셀 저장</option>
+                        </select>
+                      </label>
+                      <label className="block space-y-2 text-sm">
+                        <span>이미지 인코딩 품질: {(task as CompressTask).settings.imageQuality ?? 80}%</span>
+                        <input type="range" min="10" max="100" step="5" className="w-full accent-red-500"
+                          value={(task as CompressTask).settings.imageQuality ?? 80}
+                          onChange={e => onUpdate({ settings: { ...(task as CompressTask).settings, imageQuality: Number(e.target.value) } })} />
+                        <span className="block text-xs text-neutral-500">높을수록 화질 우선이야. PNG는 손실 품질 설정이 적용되지 않아.</span>
+                      </label>
+                      <label className="block space-y-2 text-sm">
+                        <span>최대 가로·세로 크기</span>
+                        <select className="w-full rounded-lg border border-neutral-700 bg-neutral-800 p-2.5"
+                          value={(task as CompressTask).settings.maxWidth || 0}
+                          onChange={e => onUpdate({ settings: { ...(task as CompressTask).settings, maxWidth: Number(e.target.value) || undefined } })}>
+                          <option value={0}>원본 해상도 유지</option>
+                          <option value={4096}>4096px</option><option value={2560}>2560px</option>
+                          <option value={1920}>1920px</option><option value={1280}>1280px</option>
+                          <option value={800}>800px</option>
+                        </select>
+                      </label>
+                      <label className="flex items-center gap-3 text-sm">
+                        <input type="checkbox" className="accent-red-500"
+                          checked={!!(task as CompressTask).settings.keepMetadata}
+                          onChange={e => onUpdate({ settings: { ...(task as CompressTask).settings, keepMetadata: e.target.checked } })} />
+                        JPEG EXIF 보존 시도
+                      </label>
+                      <p className="text-xs text-neutral-500">EXIF 보존은 JPEG에서만 시도해. 일부 메타데이터와 광색역 정보는 유지되지 않을 수 있어.</p>
+                    </>
+                  )}
+                  {isVideo && (
+                    <>
+                      <label className="block space-y-2 text-sm">
+                        <span>영상 품질 (CRF): {(task as CompressTask).settings.videoCrf ?? 28}</span>
+                        <input type="range" min="18" max="40" step="1" className="w-full accent-red-500"
+                          value={(task as CompressTask).settings.videoCrf ?? 28}
+                          onChange={e => onUpdate({ settings: { ...(task as CompressTask).settings, videoCrf: Number(e.target.value) } })} />
+                        <span className="block text-xs text-neutral-500">숫자가 낮을수록 화질 우선, 높을수록 압축 우선이야.</span>
+                      </label>
+                      <label className="block space-y-2 text-sm">
+                        <span>최대 출력 해상도</span>
+                        <select className="w-full rounded-lg border border-neutral-700 bg-neutral-800 p-2.5"
+                          value={(task as CompressTask).settings.resolution || 'original'}
+                          onChange={e => onUpdate({ settings: { ...(task as CompressTask).settings, resolution: e.target.value as 'original' | '1080p' | '720p' | '480p' } })}>
+                          <option value="original">원본 유지</option><option value="1080p">1080p 이하</option>
+                          <option value="720p">720p 이하</option><option value="480p">480p 이하</option>
+                        </select>
+                      </label>
+                      <label className="block space-y-2 text-sm">
+                        <span>인코딩 속도</span>
+                        <select className="w-full rounded-lg border border-neutral-700 bg-neutral-800 p-2.5"
+                          value={(task as CompressTask).settings.videoPreset || 'veryfast'}
+                          onChange={e => onUpdate({ settings: { ...(task as CompressTask).settings, videoPreset: e.target.value as 'ultrafast' | 'veryfast' | 'medium' } })}>
+                          <option value="ultrafast">가장 빠름 · 압축 효율 낮음</option>
+                          <option value="veryfast">균형 · 권장</option>
+                          <option value="medium">느림 · 압축 효율 높음</option>
+                        </select>
+                      </label>
+                      <label className="block space-y-2 text-sm">
+                        <span>오디오 비트레이트</span>
+                        <select className="w-full rounded-lg border border-neutral-700 bg-neutral-800 p-2.5"
+                          value={(task as CompressTask).settings.audioBitrate ?? 128}
+                          onChange={e => onUpdate({ settings: { ...(task as CompressTask).settings, audioBitrate: Number(e.target.value) } })}>
+                          <option value={64}>64 kbps · 용량 절약</option>
+                          <option value={128}>128 kbps · 권장</option>
+                          <option value={192}>192 kbps · 고음질</option>
+                          <option value={256}>256 kbps · 최고</option>
+                        </select>
+                      </label>
+                      <label className="flex items-center gap-3 text-sm">
+                        <input type="checkbox" className="accent-red-500"
+                          checked={!!(task as CompressTask).settings.mute}
+                          onChange={e => onUpdate({ settings: { ...(task as CompressTask).settings, mute: e.target.checked } })} />
+                        오디오 트랙 제거
+                      </label>
+                      <p className="text-xs text-neutral-500">영상 결과는 호환성을 위해 H.264/AAC MP4로 출력해.</p>
+                    </>
+                  )}
+                </div>
+              )}
+            </section>
           )}
 
           {isUpscale && (
@@ -139,73 +242,7 @@ export default function AdvancedSettings({ task, onUpdate, onClose }: AdvancedSe
              </>
           )}
 
-          {isCompress && isVideo && (
-            <>
-              <section className="space-y-3">
-                <label className="text-sm font-medium text-neutral-300">화면 크기 (해상도)</label>
-                <select
-                  value={(task as CompressTask).settings.resolution || 'original'}
-                  onChange={(e) => onUpdate({ settings: { ...(task as CompressTask).settings, resolution: e.target.value as any } })}
-                  className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-red-500 outline-none transition-all"
-                >
-                  <option value="original">원본 유지 (파일 크기 변화 없음)</option>
-                  <option value="1080p">1080p (FHD) - 대화면 감상용</option>
-                  <option value="720p">720p (HD) - 웹 업로드 및 공유용</option>
-                  <option value="480p">480p (SD) - 용량 절약 및 모바일용</option>
-                </select>
-              </section>
 
-              <section className="space-y-3">
-                <label className="text-sm font-medium text-neutral-300">추가 옵션</label>
-                <label className="flex items-center gap-3 p-4 bg-neutral-800/50 rounded-2xl cursor-pointer hover:bg-neutral-800 transition-colors border border-neutral-700/50">
-                  <input
-                    type="checkbox"
-                    checked={!!(task as CompressTask).settings.mute}
-                    onChange={(e) => onUpdate({ settings: { ...(task as CompressTask).settings, mute: e.target.checked } })}
-                    className="w-5 h-5 rounded border-neutral-700 text-red-500 focus:ring-offset-neutral-900 focus:ring-red-500 bg-neutral-900"
-                  />
-                  <div>
-                    <div className="text-sm font-bold">소리 제거 (음소거)</div>
-                    <div className="text-xs text-neutral-500 leading-tight">영상에서 오디오를 삭제하여 용량을 추가로 확보합니다.</div>
-                  </div>
-                </label>
-              </section>
-            </>
-          )}
-
-          {isCompress && isImage && (
-            <>
-              <section className="space-y-3">
-                <label className="text-sm font-medium text-neutral-300">최대 이미지 가로 크기 (px)</label>
-                <select
-                  value={(task as CompressTask).settings.maxWidth || 0}
-                  onChange={(e) => onUpdate({ settings: { ...(task as CompressTask).settings, maxWidth: parseInt(e.target.value) || undefined } })}
-                  className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-red-500 outline-none transition-all"
-                >
-                  <option value={0}>원본 크기 유지</option>
-                  <option value={1920}>1920px (FHD)</option>
-                  <option value={1280}>1280px (HD)</option>
-                  <option value={800}>800px (웹용)</option>
-                </select>
-              </section>
-
-              <section className="space-y-3">
-                <label className="text-sm font-medium text-neutral-300">데이터 설정</label>
-                <label className="flex items-center gap-3 p-4 bg-neutral-800/50 rounded-2xl cursor-pointer hover:bg-neutral-800 transition-colors border border-neutral-700/50">
-                  <input
-                    type="checkbox"
-                    checked={!!(task as CompressTask).settings.keepMetadata}
-                    onChange={(e) => onUpdate({ settings: { ...(task as CompressTask).settings, keepMetadata: e.target.checked } })}
-                    className="w-5 h-5 rounded border-neutral-700 text-red-500 focus:ring-offset-neutral-900 focus:ring-red-500 bg-neutral-900"
-                  />
-                  <div>
-                    <div className="text-sm font-bold">EXIF 메타데이터 유지</div>
-                    <div className="text-xs text-neutral-500 leading-tight">촬영 위치, 카메라 정보 등을 삭제하지 않습니다. (삭제 시 용량이 더 줄어듭니다)</div>
-                  </div>
-                </label>
-              </section>
-            </>
-          )}
         </div>
 
         <div className="p-6 bg-neutral-800/20 border-t border-neutral-800 flex justify-end">

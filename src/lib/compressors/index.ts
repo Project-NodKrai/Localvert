@@ -1,86 +1,88 @@
 import imageCompression from 'browser-image-compression';
 import { acquireFFmpeg, releaseFFmpeg } from '../converters/media';
+import { imageOptions, outputIsSmaller, scaleFilter, videoOptions } from './settings';
+import type { CompressionSettings } from './settings';
 
-export async function compressImage(file: File, quality: number, settings: { maxWidth?: number; keepMetadata?: boolean }): Promise<Blob> {
-  const options = {
-    maxSizeMB: quality > 80 ? 10 : quality > 50 ? 2 : 0.5,
-    maxWidthOrHeight: settings.maxWidth ? settings.maxWidth : (quality > 80 ? 3840 : quality > 50 ? 1920 : 1024),
-    useWebWorker: true,
-    initialQuality: quality / 100,
-    preserveExif: settings.keepMetadata ?? false,
-  };
-  
+async function prepareImage(file: File): Promise<File> {
+  if (!/\.(heic|heif)$/i.test(file.name)) return file;
+  const { default: heic2any } = await import('heic2any');
+  const decoded = await heic2any({ blob: file, toType: 'image/png' });
+  const png = Array.isArray(decoded) ? decoded[0] : decoded;
+  if (!png) throw new Error('HEIC 이미지 디코딩에 실패했어.');
+  return new File([png], file.name.replace(/\.(heic|heif)$/i, '.png'), { type: 'image/png' });
+}
+
+export async function compressImage(file: File, strength: number, settings: CompressionSettings): Promise<Blob> {
+  const prepared = await prepareImage(file);
+  const ext = file.name.split('.').pop()?.toLowerCase() || '';
+  const options = imageOptions(strength, settings, prepared.size, ext);
+  const sameContainer = (ext === options.ext || (ext === 'jpeg' && options.ext === 'jpg'));
   try {
-    const compressedFile = await imageCompression(file, options);
-    return compressedFile;
+    const candidate = await imageCompression(prepared, options);
+    if (candidate.type !== options.fileType) {
+      throw new Error('브라우저 인코더가 요청한 ' + options.ext.toUpperCase() + ' 형식을 생성하지 못했어.');
+    }
+    // A default compression must never enlarge an existing same-format image.
+    // Advanced users explicitly requesting a format/dimension can still keep it.
+    if (sameContainer && (settings.mode !== 'advanced' || settings.imageFormat === 'original') &&
+        !outputIsSmaller(candidate.size, file.size)) {
+      return file;
+    }
+    return candidate;
   } catch (error) {
-    console.error('Image compression failed:', error);
-    throw error;
+    throw new Error('이미지 압축 실패: ' + (error instanceof Error ? error.message : String(error)));
   }
 }
 
 export async function compressVideo(
-  id: string, 
-  file: File, 
-  quality: number, 
-  settings: { resolution?: 'original' | '1080p' | '720p' | '480p'; mute?: boolean },
-  onProgress?: (p: number) => void
+  id: string,
+  file: File,
+  strength: number,
+  settings: CompressionSettings,
+  onProgress?: (p: number) => void,
 ): Promise<Blob> {
+  const opts = videoOptions(strength, settings);
   const instance = await acquireFFmpeg();
-  const inputName = `input_${id}_${file.name}`;
-  const outputName = `compressed_${id}_${file.name}`;
-  
+  const safeId = id.replace(/[^A-Za-z0-9_-]/g, '');
+  const ext = file.name.split('.').pop()?.replace(/[^A-Za-z0-9]/g, '') || 'mp4';
+  const inputName = 'compress_' + safeId + '_input.' + ext;
+  const outputName = 'compress_' + safeId + '_output.mp4';
+  const progressHandler = ({ progress }: { progress: number }) => {
+    if (onProgress && Number.isFinite(progress)) onProgress(Math.round(Math.max(0, Math.min(1, progress)) * 100));
+  };
+  instance.on('progress', progressHandler);
   try {
-    const uint8 = new Uint8Array(await file.arrayBuffer());
-    await instance.writeFile(inputName, uint8);
-    
-    // CRF 18 to 51. Quality 100 -> 18, Quality 0 -> 51
-    const crf = Math.round(18 + (100 - quality) * (33 / 100));
-    
-    const progressHandler = ({ progress }: { progress: number }) => {
-      if (onProgress) onProgress(Math.round(progress * 100));
-    };
-
-    instance.on('progress', progressHandler);
-
-    // Build FFmpeg command
-    const args = ['-i', inputName];
-    
-    // Default to H.264 for compatibility and speed
-    args.push('-c:v', 'libx264', '-crf', crf.toString(), '-preset', 'ultrafast');
-
-    // Mute
-    if (settings.mute) {
-      args.push('-an');
-    } else {
-      args.push('-c:a', 'aac', '-strict', 'experimental');
+    const inputBytes = new Uint8Array(await file.arrayBuffer());
+    if (!inputBytes.length) throw new Error('빈 영상은 압축할 수 없어.');
+    await instance.writeFile(inputName, inputBytes);
+    const filter = scaleFilter(opts.resolution);
+    const args = [
+      '-hide_banner', '-y', '-i', inputName,
+      '-map', '0:v:0', ...(opts.mute ? [] : ['-map', '0:a?']),
+      '-c:v', 'libx264', '-crf', String(opts.crf), '-preset', opts.preset,
+      '-pix_fmt', 'yuv420p',
+      ...(filter ? ['-vf', filter] : []),
+      ...(opts.mute ? ['-an'] : ['-c:a', 'aac', '-b:a', String(opts.audioBitrate) + 'k']),
+      '-movflags', '+faststart', '-f', 'mp4', outputName,
+    ];
+    const exitCode = await instance.exec(args);
+    if (exitCode !== 0) throw new Error('영상 인코더가 종료 코드 ' + exitCode + '로 실패했어.');
+    const result = await instance.readFile(outputName);
+    if (typeof result === 'string') throw new Error('영상 출력이 바이너리 파일이 아니야.');
+    const data = new Uint8Array(result);
+    if (data.length < 12 || String.fromCharCode(...data.slice(4, 8)) !== 'ftyp') {
+      throw new Error('압축 결과가 유효한 MP4 컨테이너가 아니야.');
     }
-
-    // Resolution
-    if (settings.resolution && settings.resolution !== 'original') {
-      const scaleMap = {
-        '1080p': '1920:-1',
-        '720p': '1280:-1',
-        '480p': '854:-1'
-      };
-      args.push('-vf', `scale=${scaleMap[settings.resolution as keyof typeof scaleMap]}`);
+    if (onProgress) onProgress(100);
+    if (/\.mp4$/i.test(file.name) && opts.resolution === 'original' && !opts.mute &&
+        !outputIsSmaller(data.byteLength, file.size)) {
+      return file;
     }
-
-    args.push(outputName);
-
-    try {
-      await instance.exec(args);
-      
-      const data = await instance.readFile(outputName);
-      return new Blob([data], { type: 'video/mp4' });
-    } finally {
-      instance.off('progress', progressHandler);
-      try {
-        await instance.deleteFile(inputName);
-        await instance.deleteFile(outputName);
-      } catch (e) {}
-    }
+    return new Blob([data], { type: 'video/mp4' });
   } finally {
+    instance.off('progress', progressHandler);
+    try { await instance.deleteFile(inputName); } catch {}
+    try { await instance.deleteFile(outputName); } catch {}
     releaseFFmpeg();
   }
 }

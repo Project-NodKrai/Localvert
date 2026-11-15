@@ -1,4 +1,6 @@
 export type FileType = 'video' | 'audio' | 'image' | 'document' | 'archive' | 'unknown';
+import type { CompressionSettings } from './lib/compressors/settings';
+
 export type AppMode = 'convert' | 'compress' | 'upscale';
 
 export interface BaseTask {
@@ -22,15 +24,9 @@ export interface ConvertTask extends BaseTask {
 
 export interface CompressTask extends BaseTask {
   mode: 'compress';
-  quality: number; // 0 to 100
-  settings: {
-    // Image specific
-    maxWidth?: number;
-    keepMetadata?: boolean;
-    // Video specific
-    resolution?: 'original' | '1080p' | '720p' | '480p';
-    mute?: boolean;
-  };
+  /** 0 = mild, 100 = strongest compression. */
+  quality: number;
+  settings: CompressionSettings;
 }
 
 export interface UpscaleTask extends BaseTask {

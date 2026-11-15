@@ -10,9 +10,9 @@ import { useTaskQueue } from '../lib/taskQueue';
 
 function getFileType(file: File): FileType {
   const t = file.type;
-  if (t.startsWith('video/')) return 'video';
-  if (t.startsWith('audio/')) return 'audio';
-  if (t.startsWith('image/')) return 'image';
+  const ext = file.name.split('.').pop()?.toLowerCase() || '';
+  if (t.startsWith('video/') || ['mp4', 'webm', 'avi', 'mov', 'mkv', 'wmv', 'm4v', 'ogv', '3gp', 'flv'].includes(ext)) return 'video';
+  if (t.startsWith('image/') || ['heic', 'heif', 'png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'avif'].includes(ext)) return 'image';
   return 'unknown';
 }
 
@@ -31,11 +31,15 @@ export default function CompressorPage() {
         file,
         type,
         mode: 'compress',
-        quality: 80,
+        quality: 50,
         settings: {
+          mode: 'simple',
+          imageFormat: 'original',
           resolution: 'original',
           mute: false,
           keepMetadata: false,
+          videoPreset: 'veryfast',
+          audioBitrate: 128,
         },
         status: 'storing',
         progress: 0,
@@ -83,7 +87,16 @@ export default function CompressorPage() {
     if (task.type === 'image') blob = await compressImage(fileObj, task.quality, task.settings);
     else if (task.type === 'video') blob = await compressVideo(task.id, fileObj, task.quality, task.settings, onProgress);
     else throw new Error('이미지 또는 동영상만 압축할 수 있습니다.');
-    return { blob, resultName: `compressed_${task.file.name}` };
+    const sourceStem = task.file.name.replace(/\.[^.]+$/, '');
+    const originalExt = task.file.name.split('.').pop()?.toLowerCase() || '';
+    const outputExt = task.type === 'video'
+      ? (blob === fileObj ? originalExt : 'mp4')
+      : blob === fileObj ? originalExt
+      : blob.type === 'image/jpeg' ? 'jpg'
+      : blob.type === 'image/webp' ? 'webp'
+      : blob.type === 'image/png' ? 'png'
+      : originalExt;
+    return { blob, resultName: `compressed_${sourceStem}.${outputExt}` };
   };
 
   const { enqueue: handleRunTask, enqueueAll: handleRunAll, cancelTask } =
