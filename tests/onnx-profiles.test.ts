@@ -10,7 +10,7 @@ test('new ONNX models have distinct pinned sources and explicit contracts', () =
     assert.ok(model.scale === 3 || model.scale === 4);
     assert.ok(model.core >= 32);
     assert.ok(model.pad >= 8);
-    assert.ok(model.source.startsWith('https://'));
+    assert.ok(model.source.startsWith('/models/'));
     assert.equal(model.license, 'BSD-3-Clause');
   }
   assert.equal(isOnnxModelId('esrgan-slim-2x'), false);
