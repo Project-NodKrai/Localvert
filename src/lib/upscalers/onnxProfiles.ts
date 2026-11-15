@@ -110,6 +110,18 @@ export const ONNX_MODEL_PROFILES = {
     source: LOCAL_ASSETS + 'nomosuni-span-2x.onnx',
     archive: false, externalData: null, license: 'CC-BY-4.0',
   },
+  'purephoto-span-4x': {
+    name: 'PurePhoto SPAN 4×',
+    scale: 4, fixedInput: null, core: 64, pad: 12,
+    source: LOCAL_ASSETS + 'purephoto-span-4x.onnx',
+    archive: false, externalData: null, license: 'CC-BY-SA-4.0',
+  },
+  'nomos2-hq-mosr-4x': {
+    name: 'Nomos2 HQ MoSR 4×',
+    scale: 4, fixedInput: null, core: 48, pad: 12,
+    source: LOCAL_ASSETS + 'nomos2-hq-mosr-4x.onnx',
+    archive: false, externalData: null, license: 'CC-BY-4.0',
+  },
   'modernspanimation-2x': {
     name: 'ModernSpanimation SPAN 2×',
     scale: 2, fixedInput: null, core: 64, pad: 8,

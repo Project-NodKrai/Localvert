@@ -14,7 +14,7 @@ test('existing installed models are re-tiered, not duplicated under misleading l
   assert.equal(activeModel('ultra').tier, 'plus');
   assert.equal(activeModel('esrgan-medium-4x').tier, 'max');
   assert.equal(normalizeModelId('ultra'), 'esrgan-medium-2x');
-  assert.equal(ACTIVE_MODEL_IDS.length, 24);
+  assert.equal(ACTIVE_MODEL_IDS.length, 26);
 });
 
 test('planned candidates are never marked as installed or executable', () => {
@@ -72,4 +72,12 @@ test('Anime4K 4.0.1 profiles have a dedicated GPU backend and separate real mode
   assert.equal(isRunnableSelection('anime4k-v4-s-2x','nano','애니메이션'), true);
   assert.equal(isRunnableSelection('anime4k-v4-l-2x','standard','동영상'), true);
   assert.equal(isRunnableSelection('anime4k-v4-s-2x','nano','실사'), false);
+});
+
+test('4x SPAN and MoSR real-photo models are independently selectable for video', () => {
+  assert.equal(activeModel('purephoto-span-4x').scale, 4);
+  assert.equal(activeModel('nomos2-hq-mosr-4x').tier, 'pro');
+  assert.equal(isRunnableSelection('purephoto-span-4x', 'standard', '실사'), true);
+  assert.equal(isRunnableSelection('nomos2-hq-mosr-4x', 'pro', '동영상'), true);
+  assert.equal(isRunnableSelection('nomos2-hq-mosr-4x', 'nano', '동영상'), false);
 });

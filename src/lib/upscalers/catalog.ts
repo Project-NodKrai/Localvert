@@ -48,6 +48,8 @@ export const ACTIVE_MODEL_IDS = [
   'realplksr-4x',
   'nomosuni-span-2x',
   'modernspanimation-2x',
+  'purephoto-span-4x',
+  'nomos2-hq-mosr-4x',
 ] as const;
 
 export type ActiveUpscaleModelId = (typeof ACTIVE_MODEL_IDS)[number];
@@ -72,6 +74,8 @@ export const UPSCALE_CATALOG: readonly ModelRecord[] = [
   { id: 'quicksrnet-medium-4x', name: 'QuickSRNet Medium', tier: 'lite', uses: ['실사', '동영상'], scale: 4, available: true },
   { id: 'nomosuni-span-2x', name: 'NomosUni SPAN 2×', tier: 'lite', uses: ['실사', '동영상'], scale: 2, available: true },
   { id: 'modernspanimation-2x', name: 'ModernSpanimation SPAN 2×', tier: 'lite', uses: ['일러스트', '애니메이션', '동영상'], scale: 2, available: true },
+  { id: 'purephoto-span-4x', name: 'PurePhoto SPAN 4×', tier: 'standard', uses: ['실사', '동영상'], scale: 4, available: true },
+  { id: 'nomos2-hq-mosr-4x', name: 'Nomos2 HQ MoSR 4×', tier: 'pro', uses: ['실사', '동영상'], scale: 4, available: true },
   { id: 'realesr-general-x4v3', name: 'Real-ESRGAN General x4v3', tier: 'lite', uses: ['실사', '동영상'], scale: 4, available: true },
   { id: 'realesr-animevideov3', name: 'Real-ESRGAN AnimeVideo v3', tier: 'lite', uses: ['일러스트', '애니메이션', '동영상'], scale: 4, available: true },
   { id: 'realesrgan-x4plus-anime', name: 'Real-ESRGAN Anime 6B', tier: 'pro', uses: ['일러스트', '애니메이션'], scale: 4, available: true },

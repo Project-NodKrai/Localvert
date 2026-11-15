@@ -35,3 +35,11 @@ Original weights and redistributions must retain the relevant attribution and li
 - ModernSpanimation V1 SPAN x2 (animation): TNTwise, ONNX export by kortique / Photoview-AI, MIT. Source: https://huggingface.co/kortique/photoview-ai-models (permissive/2x_ModernSpanimationV1.onnx)
 
 Keep their corresponding original attribution and license notices when distributing these assets.
+
+
+## 4× SPAN and MoSR photo/video models
+
+- PurePhoto SPAN 4× — model by **asterixcool (starinspace)**, ONNX conversion by **kortique / Photoview-AI**, licensed **CC BY-SA 4.0**. Original: https://openmodeldb.info/models/4x-PurePhoto-span. ONNX file: https://huggingface.co/kortique/photoview-ai-models/blob/main/permissive/4xPurePhoto-span.onnx. Licence and required attribution: https://creativecommons.org/licenses/by-sa/4.0/. Conversion changes model packaging; downstream sharing must retain the same license and attribution.
+- Nomos2 HQ MoSR 4× — model by **Philip Hofmann (Phhofm/helaman)**, ONNX conversion by **kortique / Photoview-AI**, licensed **CC BY 4.0**. Original: https://openmodeldb.info/models/4x-Nomos2-hq-mosr. ONNX file: https://huggingface.co/kortique/photoview-ai-models/blob/main/permissive/4xNomos2_hq_mosr.onnx. Licence and attribution: https://creativecommons.org/licenses/by/4.0/.
+
+Both downloaded checkpoints are stored locally as same-origin model assets; input images remain in the user's browser. These third-party checkpoints are not authored or trained by LocalVert.
