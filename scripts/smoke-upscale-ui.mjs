@@ -13,7 +13,12 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   await page.goto('http://127.0.0.1:3000/upscale', { waitUntil: 'domcontentloaded' });
   // Workspaces mount only after the asynchronous IndexedDB initialization.
+  // Converter/Compressor/Upscaler all remain mounted to preserve queued jobs.
+  // Select the actual /upscale input, not the first hidden workspace's input.
   await page.locator('input[type="file"]').first().waitFor({ state: 'attached', timeout: 25000 });
+  const uploadIndex = await page.locator('input[type="file"]').evaluateAll(inputs =>
+    inputs.findIndex(input => !input.closest('[hidden]')));
+  if (uploadIndex < 0) throw new Error('Visible upscaler file input not found');
 
   const pixels = await page.evaluate(async () => {
     const canvas = document.createElement('canvas');
@@ -26,7 +31,7 @@ try {
   });
   // Use a genuine browser file input event; assigning input.files by hand
   // does not reliably trigger React's file-change handling.
-  await page.locator('input[type="file"]').first().setInputFiles({
+  await page.locator('input[type="file"]').nth(uploadIndex).setInputFiles({
     name: 'smoke.png', mimeType: 'image/png', buffer: Buffer.from(pixels),
   });
   try {
