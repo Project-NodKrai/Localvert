@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateVideoModel, parseVideoFrameRate, videoFrameEncodeArgs } from '../src/lib/upscalers/videoFrames';
+import { validateVideoModel, parseVideoFrameRate, videoFrameEncodeArgs, videoFrameExtractArgs } from '../src/lib/upscalers/videoFrames';
 
 test('real video AI uses selected ONNX model instead of silently defaulting to ESRGAN', () => {
   assert.equal(validateVideoModel('quicksrnet-small-4x', 'nano', '동영상'), 'quicksrnet-small-4x');
@@ -35,4 +35,12 @@ test('video frame remux keeps source audio as an optional stream and encodes MP4
 test('video frame remux rejects invalid timeline', () => {
   assert.throws(() => videoFrameEncodeArgs('p', 'in', 'out', 0, 1));
   assert.throws(() => videoFrameEncodeArgs('p', 'in', 'out', 30, 0));
+});
+
+test('variable frame rate inputs are sampled at constant FPS before frame inference', () => {
+  const args = videoFrameExtractArgs('original.mp4', 'frame_%05d.png', 29.97, 5);
+  assert.ok(args.includes('fps=29.97'));
+  assert.equal(args[args.indexOf('-t') + 1], '5');
+  assert.equal(args[args.indexOf('-start_number') + 1], '1');
+  assert.ok(!args.includes('-vsync'));
 });

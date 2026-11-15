@@ -29,6 +29,22 @@ export function parseVideoFrameRate(lines: readonly string[]): number {
   throw new Error('원본 동영상의 프레임 속도를 확인할 수 없어. 잘못된 속도로 저장하지 않도록 작업을 중단했어.');
 }
 
+/** Resample VFR sources to uniform frame spacing before individual image inference. */
+export function videoFrameExtractArgs(
+  inputName: string, outputPattern: string, frameRate: number, limitSeconds?: number,
+): string[] {
+  if (!Number.isFinite(frameRate) || frameRate < 1 || frameRate > 240) {
+    throw new Error('원본 FPS가 올바르지 않아.');
+  }
+  return [
+    '-hide_banner', '-y', '-i', inputName,
+    ...(limitSeconds && Number.isFinite(limitSeconds) && limitSeconds > 0 ? ['-t', String(limitSeconds)] : []),
+    '-vf', 'fps=' + frameRate,
+    '-start_number', '1',
+    '-f', 'image2', outputPattern,
+  ];
+}
+
 export function videoFrameEncodeArgs(
   framePattern: string,
   originalName: string,

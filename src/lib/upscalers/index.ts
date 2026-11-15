@@ -3,7 +3,7 @@ import * as tf from '@tensorflow/tfjs';
 import { setWasmPaths } from '@tensorflow/tfjs-backend-wasm';
 import { acquireFFmpeg, releaseFFmpeg } from '../converters/media';
 import { matchesMediaSignature } from '../converters/mediaProfiles';
-import { validateVideoModel, parseVideoFrameRate, videoFrameEncodeArgs } from './videoFrames';
+import { validateVideoModel, parseVideoFrameRate, videoFrameEncodeArgs, videoFrameExtractArgs } from './videoFrames';
 import { adviseImageUpscale, detectDeviceHints } from './performance';
 import type { ImageUpscaleModel } from './performance';
 import { normalizeModelId } from './catalog';
@@ -221,12 +221,7 @@ async function upscaleVideoAI(
     await instance.exec(['-hide_banner', '-i', inputName]);
     const fps = parseVideoFrameRate(logs);
 
-    const extract = ['-hide_banner', '-y', '-i', inputName];
-    if (limitSeconds && Number.isFinite(limitSeconds) && limitSeconds > 0) {
-      extract.push('-t', String(limitSeconds));
-    }
-    extract.push('-vsync', '0', '-f', 'image2', originalPattern);
-    const extractCode = await instance.exec(extract);
+    const extractCode = await instance.exec(videoFrameExtractArgs(inputName, originalPattern, fps, limitSeconds));
     if (extractCode !== 0) throw new Error('원본 영상에서 프레임을 추출하지 못했어 (FFmpeg 코드 ' + extractCode + ').');
 
     const entries = await instance.listDir('.');
