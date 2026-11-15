@@ -12,6 +12,8 @@ try {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto('http://127.0.0.1:3000/upscale', { waitUntil: 'domcontentloaded' });
+  // Workspaces mount only after the asynchronous IndexedDB initialization.
+  await page.locator('input[type="file"]').first().waitFor({ state: 'attached', timeout: 25000 });
 
   await page.evaluate(async () => {
     const canvas = document.createElement('canvas');
