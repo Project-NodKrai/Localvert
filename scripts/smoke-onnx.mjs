@@ -13,6 +13,8 @@ const models = [
   ['swin2sr-realworld-4x', 4],
   ['swin2sr-compressed-4x', 4],
   ['realcugan-hfa2k-2x', 2],
+  ['nomosuni-span-2x', 2],
+  ['modernspanimation-2x', 2],
   ['xlsr-4x', 4],
   ['quicksrnet-large-4x', 4],
   ['realplksr-2x', 2],

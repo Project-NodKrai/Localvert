@@ -43,6 +43,8 @@ export const ACTIVE_MODEL_IDS = [
   'quicksrnet-large-4x',
   'realplksr-2x',
   'realplksr-4x',
+  'nomosuni-span-2x',
+  'modernspanimation-2x',
 ] as const;
 
 export type ActiveUpscaleModelId = (typeof ACTIVE_MODEL_IDS)[number];
@@ -62,6 +64,8 @@ export type ModelRecord = {
 export const UPSCALE_CATALOG: readonly ModelRecord[] = [
   { id: 'quicksrnet-small-4x', name: 'QuickSRNet Small', tier: 'nano', uses: ['실사', '동영상'], scale: 4, available: true },
   { id: 'quicksrnet-medium-4x', name: 'QuickSRNet Medium', tier: 'lite', uses: ['실사', '동영상'], scale: 4, available: true },
+  { id: 'nomosuni-span-2x', name: 'NomosUni SPAN 2×', tier: 'lite', uses: ['실사', '동영상'], scale: 2, available: true },
+  { id: 'modernspanimation-2x', name: 'ModernSpanimation SPAN 2×', tier: 'lite', uses: ['일러스트', '애니메이션', '동영상'], scale: 2, available: true },
   { id: 'realesr-general-x4v3', name: 'Real-ESRGAN General x4v3', tier: 'lite', uses: ['실사', '동영상'], scale: 4, available: true },
   { id: 'realesr-animevideov3', name: 'Real-ESRGAN AnimeVideo v3', tier: 'lite', uses: ['일러스트', '애니메이션', '동영상'], scale: 4, available: true },
   { id: 'realesrgan-x4plus-anime', name: 'Real-ESRGAN Anime 6B', tier: 'pro', uses: ['일러스트', '애니메이션'], scale: 4, available: true },

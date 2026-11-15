@@ -104,6 +104,18 @@ export const ONNX_MODEL_PROFILES = {
     archive: false, externalData: null, license: 'CC-BY-4.0',
     outputHalo: 1,
   },
+  'nomosuni-span-2x': {
+    name: 'NomosUni SPAN 2×',
+    scale: 2, fixedInput: null, core: 64, pad: 8,
+    source: LOCAL_ASSETS + 'nomosuni-span-2x.onnx',
+    archive: false, externalData: null, license: 'CC-BY-4.0',
+  },
+  'modernspanimation-2x': {
+    name: 'ModernSpanimation SPAN 2×',
+    scale: 2, fixedInput: null, core: 64, pad: 8,
+    source: LOCAL_ASSETS + 'modernspanimation-2x.onnx',
+    archive: false, externalData: null, license: 'MIT',
+  },
   'xlsr-4x': {
     name: 'XLSR',
     scale: 4, fixedInput: 128, core: 104, pad: 12,

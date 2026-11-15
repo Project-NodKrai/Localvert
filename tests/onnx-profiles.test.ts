@@ -4,7 +4,7 @@ import { ONNX_MODEL_PROFILES, tilePlan, validateTensorShape, isOnnxModelId } fro
 
 test('new ONNX models have distinct pinned sources and explicit contracts', () => {
   const models = Object.values(ONNX_MODEL_PROFILES);
-  assert.equal(models.length, 16);
+  assert.equal(models.length, 18);
   assert.equal(new Set(models.map(m => m.source)).size, models.length);
   for (const model of models) {
     assert.ok(model.scale === 2 || model.scale === 4);
@@ -51,4 +51,14 @@ test('Real-CUGAN x2 includes one extra output border pixel on each side', () => 
   const height = tile.inputHeight * 2 + 2;
   assert.equal(validateTensorShape([1, 3, height, width], tile, 2, 1), 'chw');
   assert.throws(() => validateTensorShape([1, 3, height, width], tile, 2), /dims=/);
+});
+
+test('lightweight SPAN photo and animation profiles have actual ONNX output contracts', () => {
+  for (const id of ['nomosuni-span-2x', 'modernspanimation-2x'] as const) {
+    const plan = tilePlan(35, 19, id);
+    assert.equal(plan.length, 1);
+    assert.equal(plan[0].inputWidth, 51);
+    assert.equal(plan[0].inputHeight, 35);
+    assert.equal(validateTensorShape([1, 3, 70, 102], plan[0], 2), 'chw');
+  }
 });

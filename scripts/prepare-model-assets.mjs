@@ -26,6 +26,8 @@ const models = [
   { name: 'swin2sr-realworld-4x.onnx', url: 'https://huggingface.co/Xenova/swin2SR-realworld-sr-x4-64-bsrgan-psnr/resolve/main/onnx/model.onnx', zipped: false },
   { name: 'swin2sr-compressed-4x.onnx', url: 'https://huggingface.co/Xenova/swin2SR-compressed-sr-x4-48/resolve/main/onnx/model.onnx', zipped: false },
   { name: 'realcugan-hfa2k-2x.onnx', url: 'https://huggingface.co/nesaorg/2xHFA2kReal-CUGAN_fp32_opset17/resolve/main/2xHFA2kReal-CUGAN_fp32_opset17.onnx', zipped: false },
+  { name: 'nomosuni-span-2x.onnx', url: 'https://huggingface.co/kortique/photoview-ai-models/resolve/main/permissive/nomosuni_span_x2.onnx', zipped: false },
+  { name: 'modernspanimation-2x.onnx', url: 'https://huggingface.co/kortique/photoview-ai-models/resolve/main/permissive/2x_ModernSpanimationV1.onnx', zipped: false },
   { name: 'xlsr-4x.onnx', url: qBase + 'xlsr/releases/v0.63.0/xlsr-onnx-float.zip', zipped: true, dataName: 'xlsr.data' },
   { name: 'quicksrnet-large-4x.onnx', url: qBase + 'quicksrnetlarge/releases/v0.63.0/quicksrnetlarge-onnx-float.zip', zipped: true, dataName: 'quicksrnetlarge.data' },
   { name: 'realplksr-2x.onnx', url: 'https://huggingface.co/darktable-org/upscale-realplksr-onnx/resolve/main/onnx/model_x2.onnx', zipped: false },
