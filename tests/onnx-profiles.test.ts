@@ -4,15 +4,15 @@ import { ONNX_MODEL_PROFILES, tilePlan, validateTensorShape, isOnnxModelId } fro
 
 test('new ONNX models have distinct pinned sources and explicit contracts', () => {
   const models = Object.values(ONNX_MODEL_PROFILES);
-  assert.equal(models.length, 5);
+  assert.equal(models.length, 12);
   assert.equal(new Set(models.map(m => m.source)).size, models.length);
   for (const model of models) {
-    assert.ok(model.scale === 4);
+    assert.ok(model.scale === 2 || model.scale === 4);
     assert.ok(model.core >= 32);
     assert.ok(model.pad >= 8);
     assert.ok(model.source.startsWith('/models/'));
-    assert.equal(model.license, 'BSD-3-Clause');
-    if (model.fixedInput) assert.ok(model.externalData?.endsWith('.data'));
+    assert.ok(['BSD-3-Clause', 'Apache-2.0', 'CC-BY-4.0'].includes(model.license));
+    if (model.externalData) assert.ok(model.externalData.endsWith('.data'));
   }
   assert.equal(isOnnxModelId('esrgan-slim-2x'), false);
   assert.equal(isOnnxModelId('quicksrnet-small-4x'), true);
@@ -43,4 +43,12 @@ test('output tensor layout is validated before any canvas output is reported', (
   assert.equal(validateTensorShape([1,3,h,w], tile, 4), 'chw');
   assert.equal(validateTensorShape([1,h,w,3], tile, 4), 'hwc');
   assert.throws(() => validateTensorShape([1,1,h,w], tile, 4), /출력 텐서/);
+});
+
+test('Real-CUGAN x2 includes one extra output border pixel on each side', () => {
+  const tile = tilePlan(5, 3, 'realcugan-hfa2k-2x')[0];
+  const width = tile.inputWidth * 2 + 2;
+  const height = tile.inputHeight * 2 + 2;
+  assert.equal(validateTensorShape([1, 3, height, width], tile, 2, 1), 'chw');
+  assert.throws(() => validateTensorShape([1, 3, height, width], tile, 2), /dims=/);
 });

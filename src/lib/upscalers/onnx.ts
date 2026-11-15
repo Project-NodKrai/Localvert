@@ -127,10 +127,11 @@ export function rgbaToNchw(
 export function decodeOnnxTile(
   output: Float32Array, dims: readonly number[], tile: TileRect,
   source: Uint8ClampedArray, srcWidth: number, scale: number, padding: number,
+  outputHalo = 0,
 ): ImageData {
-  const layout = validateTensorShape(dims, tile, scale);
-  const fullWidth = tile.inputWidth * scale;
-  const fullHeight = tile.inputHeight * scale;
+  const layout = validateTensorShape(dims, tile, scale, outputHalo);
+  const fullWidth = tile.inputWidth * scale + outputHalo * 2;
+  const fullHeight = tile.inputHeight * scale + outputHalo * 2;
   const plane = fullWidth * fullHeight;
   if (output.length !== plane * 3) throw new Error('ONNX 출력 픽셀 수가 올바르지 않아.');
   const drawW = tile.coreWidth * scale;
@@ -138,7 +139,8 @@ export function decodeOnnxTile(
   const rgba = new Uint8ClampedArray(drawW * drawH * 4);
   for (let y = 0; y < drawH; y++) {
     for (let x = 0; x < drawW; x++) {
-      const ox = padding * scale + x, oy = padding * scale + y;
+      const ox = padding * scale + outputHalo + x;
+      const oy = padding * scale + outputHalo + y;
       const si = oy * fullWidth + ox;
       const di = (y * drawW + x) * 4;
       for (let c = 0; c < 3; c++) {
@@ -209,6 +211,7 @@ export async function upscaleOnnxImage(
       : new Float32Array(prediction.data);
     const region = decodeOnnxTile(
       data, prediction.dims, tile, srcPixels, width, profile.scale, profile.pad,
+      'outputHalo' in profile ? profile.outputHalo : 0,
     );
     outputCtx.putImageData(region, tile.x * profile.scale, tile.y * profile.scale);
     prediction.dispose?.();

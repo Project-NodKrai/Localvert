@@ -61,6 +61,49 @@ export const ONNX_MODEL_PROFILES = {
     externalData: null,
     license: 'BSD-3-Clause',
   },
+  'realesrgan-x4plus': {
+    name: 'Real-ESRGAN x4plus',
+    scale: 4, fixedInput: null, core: 32, pad: 12,
+    source: LOCAL_ASSETS + 'realesrgan-x4plus.onnx',
+    archive: false, externalData: null, license: 'BSD-3-Clause',
+  },
+  'realesrgan-anime-4b32f': {
+    name: 'Real-ESRGAN Anime 4B32F',
+    scale: 4, fixedInput: null, core: 48, pad: 12,
+    source: LOCAL_ASSETS + 'realesrgan-anime-4b32f.onnx',
+    archive: false, externalData: null, license: 'BSD-3-Clause',
+  },
+  'swin2sr-lightweight-2x': {
+    name: 'Swin2SR Lightweight',
+    scale: 2, fixedInput: 64, core: 48, pad: 8,
+    source: LOCAL_ASSETS + 'swin2sr-lightweight-2x.onnx',
+    archive: false, externalData: null, license: 'Apache-2.0',
+  },
+  'swin2sr-classical-4x': {
+    name: 'Swin2SR Classical',
+    scale: 4, fixedInput: 64, core: 48, pad: 8,
+    source: LOCAL_ASSETS + 'swin2sr-classical-4x.onnx',
+    archive: false, externalData: null, license: 'Apache-2.0',
+  },
+  'swin2sr-realworld-4x': {
+    name: 'Swin2SR RealWorld',
+    scale: 4, fixedInput: 64, core: 48, pad: 8,
+    source: LOCAL_ASSETS + 'swin2sr-realworld-4x.onnx',
+    archive: false, externalData: null, license: 'Apache-2.0',
+  },
+  'swin2sr-compressed-4x': {
+    name: 'Swin2SR Compressed',
+    scale: 4, fixedInput: 48, core: 32, pad: 8,
+    source: LOCAL_ASSETS + 'swin2sr-compressed-4x.onnx',
+    archive: false, externalData: null, license: 'Apache-2.0',
+  },
+  'realcugan-hfa2k-2x': {
+    name: 'Real-CUGAN HFA2k',
+    scale: 2, fixedInput: null, core: 48, pad: 10,
+    source: LOCAL_ASSETS + 'realcugan-hfa2k-2x.onnx',
+    archive: false, externalData: null, license: 'CC-BY-4.0',
+    outputHalo: 1,
+  },
 } as const;
 export type OnnxModelId = keyof typeof ONNX_MODEL_PROFILES;
 
@@ -98,10 +141,10 @@ export function tilePlan(width: number, height: number, id: OnnxModelId): TileRe
 }
 
 export function validateTensorShape(
-  dims: readonly number[], tile: TileRect, scale: number,
+  dims: readonly number[], tile: TileRect, scale: number, outputHalo = 0,
 ): 'chw' | 'hwc' {
-  const w = tile.inputWidth * scale;
-  const h = tile.inputHeight * scale;
+  const w = tile.inputWidth * scale + outputHalo * 2;
+  const h = tile.inputHeight * scale + outputHalo * 2;
   if (dims.length === 4 && dims[0] === 1 && dims[1] === 3 && dims[2] === h && dims[3] === w) return 'chw';
   if (dims.length === 4 && dims[0] === 1 && dims[1] === h && dims[2] === w && dims[3] === 3) return 'hwc';
   throw new Error('모델 출력 텐서의 크기가 예상한 ' + w + '×' + h + ' 이미지와 달라. 실제 dims=' + JSON.stringify(dims));
