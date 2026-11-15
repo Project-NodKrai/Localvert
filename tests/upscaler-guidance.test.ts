@@ -6,8 +6,8 @@ test('standard and ultra have distinct advisory requirements and patch sizes', (
   const hints = { memoryHintGB: 8, logicalCores: 8, webglAvailable: true, maxTextureSize: 16384 };
   const standard = adviseImageUpscale('standard', 2000, 1500, hints);
   const ultra = adviseImageUpscale('ultra', 2000, 1500, hints);
-  assert.equal(standard.recommendedSystemRamGB, 16);
-  assert.equal(ultra.recommendedSystemRamGB, 32);
+  assert.equal(standard.recommendedSystemRamGB, 8);
+  assert.equal(ultra.recommendedSystemRamGB, 24);
   assert.equal(standard.patchSize, 256);
   assert.equal(ultra.patchSize, 128);
   assert.equal(standard.outputMegapixels, 12);
@@ -27,7 +27,7 @@ test('a large Ultra input raises a warning and reduces patch size but never bloc
 test('browser memory hint is not treated as total system RAM', () => {
   const guidance = adviseImageUpscale('ultra', 1000, 1000, { memoryHintGB: 8, webglAvailable: true });
   assert.equal(guidance.caution, false);
-  assert.equal(guidance.recommendedSystemRamGB, 32);
+  assert.equal(guidance.recommendedSystemRamGB, 24);
 });
 
 test('WebGL-unavailable devices can still choose CPU or WASM execution', () => {

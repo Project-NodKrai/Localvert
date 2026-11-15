@@ -1,5 +1,6 @@
 export type FileType = 'video' | 'audio' | 'image' | 'document' | 'archive' | 'unknown';
 import type { CompressionSettings } from './lib/compressors/settings';
+import type { UpscaleModelSelection } from './lib/upscalers/catalog';
 
 export type AppMode = 'convert' | 'compress' | 'upscale';
 
@@ -31,7 +32,7 @@ export interface CompressTask extends BaseTask {
 
 export interface UpscaleTask extends BaseTask {
   mode: 'upscale';
-  model: 'standard' | 'ultra';
+  model: UpscaleModelSelection;
   videoMethod: 'filter' | 'ai';
   limitSeconds?: number;
   width?: number;
