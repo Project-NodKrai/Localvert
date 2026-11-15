@@ -110,8 +110,19 @@ export default function FileList({
                       </div>
                     ) : task.mode === 'compress' ? (
                       <div className="flex flex-col items-end gap-0.5">
-                        <span className="text-[10px] text-neutral-500 font-bold uppercase tracking-tight">Compression</span>
-                        <span className="text-xs text-red-500 font-mono font-bold">Q:{(task as CompressTask).quality}%</span>
+                        <span className="text-[10px] text-neutral-500 font-bold uppercase tracking-tight">{(task as CompressTask).settings.mode === 'advanced' ? '고급 압축' : '압축 강도'}</span>
+                        {(task as CompressTask).settings.mode === 'advanced' ? (
+                          <span className="text-xs text-red-400 font-medium">사용자 설정</span>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <input type="range" min="0" max="100" step="5"
+                              aria-label={task.file.name + ' 압축 강도'}
+                              value={(task as CompressTask).quality}
+                              onChange={(e) => onQualityChange(task.id, Number(e.target.value))}
+                              className="w-28 accent-red-500" />
+                            <span className="text-xs text-red-400 font-mono w-9 text-right">{(task as CompressTask).quality}%</span>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className="flex flex-col items-end gap-0.5">
