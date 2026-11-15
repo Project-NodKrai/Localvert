@@ -43,7 +43,7 @@ test('purpose filters only compatible model candidates within the chosen tier', 
   assert.deepEqual(modelsForTierPurpose('plus', '실사').map(m => m.id),
     ['esrgan-medium-2x', 'realplksr-2x']);
   assert.deepEqual(modelsForTierPurpose('max', '동영상').map(m => m.id), ['flashvsr']);
-  assert.equal(runnableModelForTierPurpose('standard', '실사'), 'esrgan-slim-2x');
+  assert.equal(runnableModelForTierPurpose('standard', '실사'), 'swin2sr-lightweight-2x');
   assert.equal(runnableModelForTierPurpose('max', '실사'), 'esrgan-medium-4x');
 });
 
