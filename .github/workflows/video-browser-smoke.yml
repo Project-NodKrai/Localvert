@@ -1,0 +1,37 @@
+name: AI video browser smoke
+
+on:
+  pull_request:
+    paths:
+      - 'src/lib/upscalers/index.ts'
+      - 'src/lib/upscalers/videoFrames.ts'
+      - 'src/pages/UpscalerPage.tsx'
+      - 'src/components/AdvancedSettings.tsx'
+      - 'scripts/smoke-video.mjs'
+      - '.github/workflows/video-browser-smoke.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  video-model:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.57.0-noble
+      options: --ipc=host
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install native FFmpeg and ffprobe for media fixture verification
+        run: apt-get update && apt-get install -y ffmpeg
+      - run: npm ci
+      - run: npm install --no-save --package-lock=false playwright@1.57.0
+      - name: Exercise selected Nano ONNX on actual browser video and verify audio/FPS
+        run: |
+          npm run dev -- --host 127.0.0.1 > /tmp/localvert-vite-video.log 2>&1 &
+          for i in $(seq 1 50); do curl -fsS http://127.0.0.1:3000/upscale >/dev/null && break || sleep 1; done
+          node scripts/smoke-video.mjs
