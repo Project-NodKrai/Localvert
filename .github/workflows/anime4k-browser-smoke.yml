@@ -1,0 +1,36 @@
+name: Anime4K browser smoke
+
+on:
+  pull_request:
+    paths:
+      - 'src/lib/upscalers/anime4k.ts'
+      - 'src/lib/upscalers/catalog.ts'
+      - 'src/lib/upscalers/index.ts'
+      - 'scripts/smoke-anime4k.mjs'
+      - '.github/workflows/anime4k-browser-smoke.yml'
+      - 'package.json'
+      - 'package-lock.json'
+
+permissions:
+  contents: read
+
+jobs:
+  webgl:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.57.0-noble
+      options: --ipc=host
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm install --no-save --package-lock=false playwright@1.57.0
+      - name: Exercise Anime4K v4 S/M/L on Chromium WebGL
+        run: |
+          npm run dev -- --host 127.0.0.1 >/tmp/anime4k-vite.log 2>&1 &
+          for i in $(seq 1 40); do curl -fsS http://127.0.0.1:3000/upscale >/dev/null && break || sleep 1; done
+          node scripts/smoke-anime4k.mjs
