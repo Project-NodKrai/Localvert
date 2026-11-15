@@ -61,8 +61,8 @@ export default function TierPurposeSelector({ task, onUpdate, imageAdvice }: Pro
             {UPSCALE_PURPOSES.map(use => (
               <button key={use} type="button" aria-pressed={purpose === use}
                 onClick={() => { pick(tier, use); setPurposeOpen(false); }}
-                className={\`rounded-xl border px-3 py-2.5 text-sm transition-colors
-                  \${purpose === use ? 'border-blue-500 bg-blue-500/20 text-white' : 'border-neutral-700 bg-neutral-900 text-neutral-300 hover:border-neutral-500'}\`}>
+                className={`rounded-xl border px-3 py-2.5 text-sm transition-colors
+                  ${purpose === use ? 'border-blue-500 bg-blue-500/20 text-white' : 'border-neutral-700 bg-neutral-900 text-neutral-300 hover:border-neutral-500'}`}>
                 {use}
               </button>
             ))}
@@ -98,9 +98,9 @@ export default function TierPurposeSelector({ task, onUpdate, imageAdvice }: Pro
           <button type="button" key={candidate.id} disabled={!candidate.available}
             aria-pressed={Boolean(candidate.available && candidate.id === model.id)}
             onClick={() => onUpdate({ model: candidate.id as UpscaleTask['model'] })}
-            className={\`flex w-full items-center justify-between gap-3 rounded-xl border p-3 text-left transition-colors
-              \${!candidate.available ? 'cursor-not-allowed border-neutral-800 bg-neutral-900/60 opacity-60'
-                : candidate.id === model.id ? 'border-blue-500 bg-blue-500/10' : 'border-neutral-700 bg-neutral-800/60 hover:border-neutral-500'}\`}>
+            className={`flex w-full items-center justify-between gap-3 rounded-xl border p-3 text-left transition-colors
+              ${!candidate.available ? 'cursor-not-allowed border-neutral-800 bg-neutral-900/60 opacity-60'
+                : candidate.id === model.id ? 'border-blue-500 bg-blue-500/10' : 'border-neutral-700 bg-neutral-800/60 hover:border-neutral-500'}`}>
             <div className="min-w-0">
               <p className="text-sm font-semibold text-white">{candidate.name}{candidate.scale ? ' · ' + candidate.scale + '×' : ''}</p>
               <p className="text-xs text-neutral-400">{candidate.note}</p>
