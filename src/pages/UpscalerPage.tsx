@@ -6,6 +6,7 @@ import { Task, UpscaleTask, FileType } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { upscaleImage, upscaleVideo } from '../lib/upscalers';
 import { adviseImageUpscale, detectDeviceHints } from '../lib/upscalers/performance';
+import { activeModel, isRunnableSelection } from '../lib/upscalers/catalog';
 import { storeFile, removeStoredFile, getStoredFile } from '../lib/storage';
 import { useTaskQueue } from '../lib/taskQueue';
 
@@ -34,6 +35,8 @@ export default function UpscalerPage() {
         type,
         mode: 'upscale',
         model: 'esrgan-slim-2x',
+        upscaleTier: 'standard',
+        upscalePurpose: '실사',
         videoMethod: 'filter',
         limitSeconds: 10,
         status: 'storing',
@@ -98,6 +101,10 @@ export default function UpscalerPage() {
     if (!storedFile) throw new Error('File not found in local storage');
     const fileObj = new File([storedFile], task.file.name, { type: task.file.type });
     if (task.mode !== 'upscale') throw new Error('Invalid task type');
+    if (task.type === 'image' &&
+      !isRunnableSelection(task.model, task.upscaleTier ?? activeModel(task.model).tier, task.upscalePurpose ?? '실사')) {
+      throw new Error('선택한 등급과 용도에 실행 가능한 모델이 없어. 복원 설정에서 모델을 다시 선택해 줘.');
+    }
     let blob: Blob;
     if (task.type === 'image') blob = await upscaleImage(fileObj, task.model, onProgress);
     else if (task.type === 'video') blob = await upscaleVideo(task.id, fileObj, task.videoMethod, task.limitSeconds, onProgress);
@@ -127,6 +134,11 @@ export default function UpscalerPage() {
         const message = '동영상 AI 복원은 프레임 전체를 변환하므로 긴 영상에서 메모리 부족이나 장시간 처리가 발생할 수 있어.';
         if (!warnings.includes(message)) warnings.push(message);
       }
+    }
+    if (chosen.some(task => task.mode === 'upscale' && task.type === 'image' &&
+      !isRunnableSelection(task.model, task.upscaleTier ?? activeModel(task.model).tier, task.upscalePurpose ?? '실사'))) {
+      window.alert('선택한 등급과 용도에 실행 가능한 모델이 없어. 설정에서 사용 가능한 모델을 선택해 줘.');
+      return;
     }
     if (warnings.length) {
       setPendingConfirmation({ ids: chosen.map(task => task.id), messages: warnings });

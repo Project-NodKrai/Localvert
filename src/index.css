@@ -128,3 +128,30 @@
     @apply font-sans;
     }
 }
+
+/* Discrete nine-position tier control. */
+.upscale-tier-range {
+  --upscale-progress: 25%;
+  appearance: none;
+  -webkit-appearance: none;
+  display: block;
+  height: 28px;
+  margin: 8px 0;
+  border-radius: 999px;
+  outline-offset: 5px;
+  background: linear-gradient(to right, #3b82f6 0 var(--upscale-progress), #404040 var(--upscale-progress) 100%);
+  touch-action: pan-y;
+}
+.upscale-tier-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 42px; height: 42px; border-radius: 50%;
+  background: #fafafa; border: 1px solid #d4d4d4;
+  box-shadow: 0 1px 5px rgb(0 0 0 / 0.25);
+}
+.upscale-tier-range::-moz-range-thumb {
+  width: 42px; height: 42px; border-radius: 50%;
+  background: #fafafa; border: 1px solid #d4d4d4;
+  box-shadow: 0 1px 5px rgb(0 0 0 / 0.25);
+}
+.upscale-tier-range:focus-visible { outline: 2px solid #60a5fa; }
