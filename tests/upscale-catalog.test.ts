@@ -14,13 +14,13 @@ test('existing installed models are re-tiered, not duplicated under misleading l
   assert.equal(activeModel('ultra').tier, 'plus');
   assert.equal(activeModel('esrgan-medium-4x').tier, 'max');
   assert.equal(normalizeModelId('ultra'), 'esrgan-medium-2x');
-  assert.equal(ACTIVE_MODEL_IDS.length, 3);
+  assert.equal(ACTIVE_MODEL_IDS.length, 8);
 });
 
 test('planned candidates are never marked as installed or executable', () => {
   const ready = UPSCALE_CATALOG.filter(m => m.available);
-  assert.deepEqual(ready.map(m => m.id), [...ACTIVE_MODEL_IDS]);
-  assert.equal(UPSCALE_CATALOG.find(m => m.id === 'quicksrnet-small-3x')?.available, false);
+  assert.deepEqual(new Set(ready.map(m => m.id)), new Set(ACTIVE_MODEL_IDS));
+  assert.equal(UPSCALE_CATALOG.find(m => m.id === 'quicksrnet-small-4x')?.available, true);
 });
 
 test('4x output changes pixel count and caution thresholds versus 2x', () => {
@@ -48,8 +48,8 @@ test('purpose filters only compatible model candidates within the chosen tier', 
 });
 
 test('unavailable tier or purpose never silently selects a different executable model', () => {
-  assert.equal(runnableModelForTierPurpose('nano', '실사'), null);
-  assert.equal(runnableModelForTierPurpose('lite', '일러스트'), null);
+  assert.equal(runnableModelForTierPurpose('nano', '실사'), 'quicksrnet-small-4x');
+  assert.equal(runnableModelForTierPurpose('lite', '일러스트'), 'realesr-animevideov3');
   assert.equal(runnableModelForTierPurpose('max', '동영상'), null);
   assert.equal(runnableModelForTierPurpose('plus', '애니메이션'), null);
   assert.equal(isRunnableSelection('esrgan-slim-2x', 'nano', '실사'), false);

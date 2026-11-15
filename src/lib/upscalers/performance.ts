@@ -59,7 +59,8 @@ export function adviseImageUpscale(
   const outputMegapixels = inputMegapixels * factor * factor;
   const warnings: string[] = [];
   // Conservative initial values; these are guidance, not benchmark measurements.
-  const recommendationLimit = selected.tier === 'max' ? 2 : selected.tier === 'plus' ? 6 : selected.tier === 'standard' ? 8 : 12;
+  const recommendationLimit = selected.scale === 4 ? (selected.tier === 'max' ? 2 : 4)
+    : selected.tier === 'plus' ? 6 : selected.tier === 'standard' ? 8 : 12;
 
   if (inputMegapixels > recommendationLimit) {
     warnings.push('입력 이미지가 ' + recommendationLimit + 'MP 권장 범위를 넘어 처리 시간과 메모리 사용량이 크게 늘어날 수 있어.');

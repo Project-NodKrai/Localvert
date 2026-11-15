@@ -1,0 +1,35 @@
+name: ONNX Browser Smoke
+
+on:
+  pull_request:
+    paths:
+      - 'src/lib/upscalers/onnx.ts'
+      - 'src/lib/upscalers/onnxProfiles.ts'
+      - 'src/lib/upscalers/catalog.ts'
+      - 'scripts/smoke-onnx.mjs'
+      - '.github/workflows/onnx-browser-smoke.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  chromium-models:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.57.0-noble
+      options: --ipc=host
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Install isolated Playwright for an actual browser execution
+        run: npm install --no-save --package-lock=false playwright@1.57.0
+      - name: Exercise every ONNX model with a real RGB fixture
+        run: |
+          npm run dev -- --host 127.0.0.1 > /tmp/localvert-vite.log 2>&1 &
+          for i in $(seq 1 40); do curl -fsS http://127.0.0.1:3000/upscale >/dev/null && break || sleep 1; done
+          node scripts/smoke-onnx.mjs

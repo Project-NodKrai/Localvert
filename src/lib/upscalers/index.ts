@@ -5,6 +5,8 @@ import { acquireFFmpeg, releaseFFmpeg } from '../converters/media';
 import { adviseImageUpscale, detectDeviceHints } from './performance';
 import type { ImageUpscaleModel } from './performance';
 import { normalizeModelId } from './catalog';
+import { isOnnxModelId } from './onnxProfiles';
+import { upscaleOnnxImage } from './onnx';
 
 // Explicitly set WASM paths from CDN for reliability in sandboxed environment
 setWasmPaths('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm/dist/');
@@ -77,6 +79,8 @@ export async function getUpscaler(selection: ImageUpscaleModel = 'esrgan-slim-2x
 }
 
 export async function upscaleImage(file: File, model: ImageUpscaleModel, onProgress?: (p: number) => void): Promise<Blob> {
+  const modelId = normalizeModelId(model);
+  if (isOnnxModelId(modelId)) return upscaleOnnxImage(file, modelId, onProgress);
   try {
     return await upscaleImageInternal(file, model, onProgress);
   } catch (e: any) {
