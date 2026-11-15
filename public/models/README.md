@@ -28,3 +28,10 @@ Original weights and redistributions must retain the relevant attribution and li
 - XLSR 4× and QuickSRNet Large 4×: Qualcomm AI Hub official float ONNX exports, v0.63.0 (BSD-3-Clause)
 - RealPLKSR 2× and 4×: official darktable-org static ONNX conversion of Dongheon Lee et al. weights; model weights MIT. Original PLKSR source: https://github.com/dslisleedh/PLKSR
 - The x2 input is fixed at 512×512, and x4 at 256×256; LocalVert uses padded tiles.
+
+## SPAN 2× browser models
+
+- NomosUni SPAN x2 (photo/video): Philip Hofmann, ONNX export by kortique / Photoview-AI, CC BY 4.0. Source: https://huggingface.co/kortique/photoview-ai-models (permissive/nomosuni_span_x2.onnx)
+- ModernSpanimation V1 SPAN x2 (animation): TNTwise, ONNX export by kortique / Photoview-AI, MIT. Source: https://huggingface.co/kortique/photoview-ai-models (permissive/2x_ModernSpanimationV1.onnx)
+
+Keep their corresponding original attribution and license notices when distributing these assets.

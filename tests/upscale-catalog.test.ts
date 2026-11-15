@@ -14,7 +14,7 @@ test('existing installed models are re-tiered, not duplicated under misleading l
   assert.equal(activeModel('ultra').tier, 'plus');
   assert.equal(activeModel('esrgan-medium-4x').tier, 'max');
   assert.equal(normalizeModelId('ultra'), 'esrgan-medium-2x');
-  assert.equal(ACTIVE_MODEL_IDS.length, 19);
+  assert.equal(ACTIVE_MODEL_IDS.length, 21);
 });
 
 test('planned candidates are never marked as installed or executable', () => {
@@ -49,11 +49,18 @@ test('purpose filters only compatible model candidates within the chosen tier', 
 
 test('unavailable tier or purpose never silently selects a different executable model', () => {
   assert.equal(runnableModelForTierPurpose('nano', '실사'), 'quicksrnet-small-4x');
-  assert.equal(runnableModelForTierPurpose('lite', '일러스트'), 'realesr-animevideov3');
+  assert.equal(runnableModelForTierPurpose('lite', '일러스트'), 'modernspanimation-2x');
   assert.equal(runnableModelForTierPurpose('max', '동영상'), null);
   assert.equal(runnableModelForTierPurpose('plus', '애니메이션'), 'realesrgan-anime-4b32f');
   assert.equal(isRunnableSelection('esrgan-slim-2x', 'nano', '실사'), false);
   assert.equal(isRunnableSelection('esrgan-slim-2x', 'standard', '실사'), true);
   assert.equal(isRunnableSelection('esrgan-slim-2x', 'standard', '동영상'), false);
   assert.equal(isRunnableSelection('ultra', 'plus', '실사'), true);
+});
+
+test('two extra 2x SPAN executables cover photo and anime as separate purpose models', () => {
+  assert.equal(activeModel('nomosuni-span-2x').scale, 2);
+  assert.equal(activeModel('modernspanimation-2x').tier, 'lite');
+  assert.equal(isRunnableSelection('nomosuni-span-2x', 'lite', '실사'), true);
+  assert.equal(isRunnableSelection('modernspanimation-2x', 'lite', '애니메이션'), true);
 });
