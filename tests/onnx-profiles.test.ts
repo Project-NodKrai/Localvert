@@ -44,3 +44,11 @@ test('output tensor layout is validated before any canvas output is reported', (
   assert.equal(validateTensorShape([1,h,w,3], tile, 4), 'hwc');
   assert.throws(() => validateTensorShape([1,1,h,w], tile, 4), /출력 텐서/);
 });
+
+test('Real-CUGAN x2 includes one extra output border pixel on each side', () => {
+  const tile = tilePlan(5, 3, 'realcugan-hfa2k-2x')[0];
+  const width = tile.inputWidth * 2 + 2;
+  const height = tile.inputHeight * 2 + 2;
+  assert.equal(validateTensorShape([1, 3, height, width], tile, 2, 1), 'chw');
+  assert.throws(() => validateTensorShape([1, 3, height, width], tile, 2), /dims=/);
+});
