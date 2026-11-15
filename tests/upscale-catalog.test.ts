@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { UPSCALE_TIERS, UPSCALE_CATALOG, ACTIVE_MODEL_IDS, TIER_LABELS, normalizeModelId, activeModel } from '../src/lib/upscalers/catalog';
+import { UPSCALE_TIERS, UPSCALE_CATALOG, ACTIVE_MODEL_IDS, TIER_LABELS, normalizeModelId, activeModel, modelsForTierPurpose, runnableModelForTierPurpose, isRunnableSelection, tierPurposeLabel, UPSCALE_PURPOSES } from '../src/lib/upscalers/catalog';
 import { adviseImageUpscale } from '../src/lib/upscalers/performance';
 
 test('all nine requested tiers are ordered, including Ultra Plus and Reference', () => {
@@ -31,4 +31,29 @@ test('4x output changes pixel count and caution thresholds versus 2x', () => {
   assert.equal(plus.estimatedOutputRGBABytes, 192000000);
   assert.equal(plus.caution, true);
   assert.ok(plus.patchSize < lite.patchSize);
+});
+
+test('nine-position slider tier labels stay separate from purpose labels', () => {
+  assert.equal(UPSCALE_TIERS.length, 9);
+  assert.deepEqual(UPSCALE_PURPOSES, ['실사', '일러스트', '애니메이션', '동영상']);
+  assert.equal(tierPurposeLabel('ultra-plus', '일러스트'), 'Ultra Plus (일러스트)');
+});
+
+test('purpose filters only compatible model candidates within the chosen tier', () => {
+  assert.deepEqual(modelsForTierPurpose('plus', '실사').map(m => m.id),
+    ['esrgan-medium-2x', 'realplksr-2x']);
+  assert.deepEqual(modelsForTierPurpose('max', '동영상').map(m => m.id), ['flashvsr']);
+  assert.equal(runnableModelForTierPurpose('standard', '실사'), 'esrgan-slim-2x');
+  assert.equal(runnableModelForTierPurpose('max', '실사'), 'esrgan-medium-4x');
+});
+
+test('unavailable tier or purpose never silently selects a different executable model', () => {
+  assert.equal(runnableModelForTierPurpose('nano', '실사'), null);
+  assert.equal(runnableModelForTierPurpose('lite', '일러스트'), null);
+  assert.equal(runnableModelForTierPurpose('max', '동영상'), null);
+  assert.equal(runnableModelForTierPurpose('plus', '애니메이션'), null);
+  assert.equal(isRunnableSelection('esrgan-slim-2x', 'nano', '실사'), false);
+  assert.equal(isRunnableSelection('esrgan-slim-2x', 'standard', '실사'), true);
+  assert.equal(isRunnableSelection('esrgan-slim-2x', 'standard', '동영상'), false);
+  assert.equal(isRunnableSelection('ultra', 'plus', '실사'), true);
 });
