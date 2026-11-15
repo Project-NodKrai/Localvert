@@ -14,7 +14,7 @@ test('existing installed models are re-tiered, not duplicated under misleading l
   assert.equal(activeModel('ultra').tier, 'plus');
   assert.equal(activeModel('esrgan-medium-4x').tier, 'max');
   assert.equal(normalizeModelId('ultra'), 'esrgan-medium-2x');
-  assert.equal(ACTIVE_MODEL_IDS.length, 15);
+  assert.equal(ACTIVE_MODEL_IDS.length, 19);
 });
 
 test('planned candidates are never marked as installed or executable', () => {
@@ -41,7 +41,7 @@ test('nine-position slider tier labels stay separate from purpose labels', () =>
 
 test('purpose filters only compatible model candidates within the chosen tier', () => {
   assert.deepEqual(modelsForTierPurpose('plus', '실사').map(m => m.id),
-    ['esrgan-medium-2x', 'realplksr-2x']);
+    ['esrgan-medium-2x', 'realplksr-4x', 'realplksr-2x']);
   assert.deepEqual(modelsForTierPurpose('max', '동영상').map(m => m.id), ['flashvsr']);
   assert.equal(runnableModelForTierPurpose('standard', '실사'), 'swin2sr-lightweight-2x');
   assert.equal(runnableModelForTierPurpose('max', '실사'), 'esrgan-medium-4x');

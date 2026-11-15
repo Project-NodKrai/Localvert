@@ -39,6 +39,10 @@ export const ACTIVE_MODEL_IDS = [
   'swin2sr-realworld-4x',
   'swin2sr-compressed-4x',
   'realcugan-hfa2k-2x',
+  'xlsr-4x',
+  'quicksrnet-large-4x',
+  'realplksr-2x',
+  'realplksr-4x',
 ] as const;
 
 export type ActiveUpscaleModelId = (typeof ACTIVE_MODEL_IDS)[number];
@@ -68,11 +72,14 @@ export const UPSCALE_CATALOG: readonly ModelRecord[] = [
   { id: 'swin2sr-realworld-4x', name: 'Swin2SR RealWorld', tier: 'pro', uses: ['실사'], scale: 4, available: true },
   { id: 'swin2sr-compressed-4x', name: 'Swin2SR Compressed', tier: 'pro', uses: ['실사'], scale: 4, available: true },
   { id: 'realcugan-hfa2k-2x', name: 'Real-CUGAN HFA2k', tier: 'plus', uses: ['일러스트', '애니메이션'], scale: 2, available: true },
+  { id: 'xlsr-4x', name: 'XLSR', tier: 'nano', uses: ['실사', '동영상'], scale: 4, available: true },
+  { id: 'quicksrnet-large-4x', name: 'QuickSRNet Large', tier: 'standard', uses: ['실사', '동영상'], scale: 4, available: true },
+  { id: 'realplksr-4x', name: 'RealPLKSR 4×', tier: 'plus', uses: ['실사', '일러스트'], scale: 4, available: true },
   { id: 'esrgan-slim-2x', name: 'ESRGAN Slim', tier: 'standard', uses: ['실사', '일러스트'], scale: 2, available: true },
   { id: 'span-f', name: 'SPAN-F', tier: 'lite', uses: ['실사', '일러스트'], scale: null, available: false },
   { id: 'esrgan-medium-2x', name: 'ESRGAN Medium', tier: 'plus', uses: ['실사', '일러스트'], scale: 2, available: true },
   { id: 'esrgan-medium-4x', name: 'ESRGAN Medium 4×', tier: 'max', uses: ['실사', '일러스트'], scale: 4, available: true },
-  { id: 'realplksr-2x', name: 'RealPLKSR', tier: 'plus', uses: ['실사', '일러스트'], scale: 2, available: false },
+  { id: 'realplksr-2x', name: 'RealPLKSR 2×', tier: 'plus', uses: ['실사', '일러스트'], scale: 2, available: true },
   { id: 'drct', name: 'DRCT', tier: 'pro', uses: ['실사', '일러스트'], scale: null, available: false },
   { id: 'adcsr', name: 'AdcSR', tier: 'pro', uses: ['실사'], scale: null, available: false },
   { id: 'osediff', name: 'OSEDiff', tier: 'max', uses: ['실사'], scale: null, available: false },

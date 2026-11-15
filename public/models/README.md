@@ -23,3 +23,8 @@ The original weights and source models must retain required BSD attribution in a
 - Real-CUGAN HFA2k (2×), nesaorg ONNX conversion of Philip Hofmann's weights (CC BY 4.0); attribution required
 
 Original weights and redistributions must retain the relevant attribution and license terms.
+
+## Qualcomm 4× and RealPLKSR
+- XLSR 4× and QuickSRNet Large 4×: Qualcomm AI Hub official float ONNX exports, v0.63.0 (BSD-3-Clause)
+- RealPLKSR 2× and 4×: official darktable-org static ONNX conversion of Dongheon Lee et al. weights; model weights MIT. Original PLKSR source: https://github.com/dslisleedh/PLKSR
+- The x2 input is fixed at 512×512, and x4 at 256×256; LocalVert uses padded tiles.

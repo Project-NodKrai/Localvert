@@ -104,6 +104,30 @@ export const ONNX_MODEL_PROFILES = {
     archive: false, externalData: null, license: 'CC-BY-4.0',
     outputHalo: 1,
   },
+  'xlsr-4x': {
+    name: 'XLSR',
+    scale: 4, fixedInput: 128, core: 104, pad: 12,
+    source: LOCAL_ASSETS + 'xlsr-4x.onnx',
+    archive: false, externalData: 'xlsr.data', license: 'BSD-3-Clause',
+  },
+  'quicksrnet-large-4x': {
+    name: 'QuickSRNet Large',
+    scale: 4, fixedInput: 128, core: 104, pad: 12,
+    source: LOCAL_ASSETS + 'quicksrnet-large-4x.onnx',
+    archive: false, externalData: 'quicksrnetlarge.data', license: 'BSD-3-Clause',
+  },
+  'realplksr-2x': {
+    name: 'RealPLKSR 2×',
+    scale: 2, fixedInput: 512, core: 448, pad: 32,
+    source: LOCAL_ASSETS + 'realplksr-2x.onnx',
+    archive: false, externalData: null, license: 'MIT',
+  },
+  'realplksr-4x': {
+    name: 'RealPLKSR 4×',
+    scale: 4, fixedInput: 256, core: 224, pad: 16,
+    source: LOCAL_ASSETS + 'realplksr-4x.onnx',
+    archive: false, externalData: null, license: 'MIT',
+  },
 } as const;
 export type OnnxModelId = keyof typeof ONNX_MODEL_PROFILES;
 

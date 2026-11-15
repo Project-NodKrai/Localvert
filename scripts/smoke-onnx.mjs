@@ -13,6 +13,10 @@ const models = [
   ['swin2sr-realworld-4x', 4],
   ['swin2sr-compressed-4x', 4],
   ['realcugan-hfa2k-2x', 2],
+  ['xlsr-4x', 4],
+  ['quicksrnet-large-4x', 4],
+  ['realplksr-2x', 2],
+  ['realplksr-4x', 4],
 ];
 
 // Allow extra time on CPU for transformer and RRDB models.
