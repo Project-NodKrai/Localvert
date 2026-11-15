@@ -4,6 +4,7 @@ import { setWasmPaths } from '@tensorflow/tfjs-backend-wasm';
 import { acquireFFmpeg, releaseFFmpeg } from '../converters/media';
 import { adviseImageUpscale, detectDeviceHints } from './performance';
 import type { ImageUpscaleModel } from './performance';
+import { normalizeModelId } from './catalog';
 
 // Explicitly set WASM paths from CDN for reliability in sandboxed environment
 setWasmPaths('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm/dist/');
@@ -52,16 +53,20 @@ async function initTfjs() {
   tfInitialized = true;
 }
 
-export async function getUpscaler(model: ImageUpscaleModel = 'standard') {
+export async function getUpscaler(selection: ImageUpscaleModel = 'esrgan-slim-2x') {
+  const model = normalizeModelId(selection);
   await initTfjs();
   if (!imageUpscalers[model]) {
     imageUpscalers[model] = (async () => {
-      if (model === 'ultra') {
-        // Load the heavier model only when the user explicitly chooses Ultra.
+      if (model === 'esrgan-medium-2x') {
         const { default: medium2x } = await import('@upscalerjs/esrgan-medium/2x');
         return new Upscaler({ model: medium2x });
       }
-      // The shipped default 2x model is the ESRGAN Slim 2x model.
+      if (model === 'esrgan-medium-4x') {
+        const { default: medium4x } = await import('@upscalerjs/esrgan-medium/4x');
+        return new Upscaler({ model: medium4x });
+      }
+      // ESRGAN Slim 2x is the current UpscalerJS default model.
       return new Upscaler();
     })().catch((error) => {
       delete imageUpscalers[model];
@@ -71,7 +76,7 @@ export async function getUpscaler(model: ImageUpscaleModel = 'standard') {
   return imageUpscalers[model];
 }
 
-export async function upscaleImage(file: File, model: 'standard' | 'ultra', onProgress?: (p: number) => void): Promise<Blob> {
+export async function upscaleImage(file: File, model: ImageUpscaleModel, onProgress?: (p: number) => void): Promise<Blob> {
   try {
     return await upscaleImageInternal(file, model, onProgress);
   } catch (e: any) {
@@ -80,14 +85,14 @@ export async function upscaleImage(file: File, model: 'standard' | 'ultra', onPr
       await tf.setBackend('wasm');
       await tf.ready();
       // Recreate the model on the fallback backend rather than retaining the failed instance.
-      delete imageUpscalers[model];
+      delete imageUpscalers[normalizeModelId(model)];
       return await upscaleImageInternal(file, model, onProgress);
     }
     throw e;
   }
 }
 
-async function upscaleImageInternal(file: File, model: 'standard' | 'ultra', onProgress?: (p: number) => void): Promise<Blob> {
+async function upscaleImageInternal(file: File, model: ImageUpscaleModel, onProgress?: (p: number) => void): Promise<Blob> {
   const upscaler = await getUpscaler(model);
 
   const img = new Image();

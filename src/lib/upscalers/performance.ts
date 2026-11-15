@@ -1,4 +1,7 @@
-export type ImageUpscaleModel = 'standard' | 'ultra';
+import { activeModel } from './catalog';
+import type { UpscaleModelSelection } from './catalog';
+
+export type ImageUpscaleModel = UpscaleModelSelection;
 
 export interface DeviceHints {
   /** Browser hints are not a measurement of total RAM or GPU VRAM. */
@@ -51,9 +54,12 @@ export function adviseImageUpscale(
   const pixels = Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0
     ? width * height : 0;
   const inputMegapixels = pixels / 1_000_000;
-  const outputMegapixels = inputMegapixels * 4; // both models upscale 2x on each axis
+  const selected = activeModel(model);
+  const factor = selected.scale!;
+  const outputMegapixels = inputMegapixels * factor * factor;
   const warnings: string[] = [];
-  const recommendationLimit = model === 'ultra' ? 8 : 12;
+  // Conservative initial values; these are guidance, not benchmark measurements.
+  const recommendationLimit = selected.tier === 'max' ? 2 : selected.tier === 'plus' ? 6 : selected.tier === 'standard' ? 8 : 12;
 
   if (inputMegapixels > recommendationLimit) {
     warnings.push('입력 이미지가 ' + recommendationLimit + 'MP 권장 범위를 넘어 처리 시간과 메모리 사용량이 크게 늘어날 수 있어.');
@@ -65,20 +71,20 @@ export function adviseImageUpscale(
     warnings.push('WebGL 가속을 확인하지 못했어. WASM 또는 CPU 대체 처리는 상당히 느릴 수 있어.');
   }
   if (hints.maxTextureSize && width > 0 && height > 0 &&
-      (width * 2 > hints.maxTextureSize || height * 2 > hints.maxTextureSize)) {
+      (width * factor > hints.maxTextureSize || height * factor > hints.maxTextureSize)) {
     warnings.push('예상 출력 크기가 GPU 텍스처 한도를 초과해. 분할 추론을 하더라도 출력 합성 단계에서 실패할 수 있어.');
   }
   const constrained = inputMegapixels > recommendationLimit ||
     (hints.memoryHintGB !== undefined && hints.memoryHintGB <= 4) ||
     hints.webglAvailable === false;
-  const defaultPatch = model === 'ultra' ? 128 : 256;
-  const patchSize = constrained ? (model === 'ultra' ? 64 : 128) : defaultPatch;
+  const defaultPatch = selected.tier === 'max' ? 64 : selected.tier === 'plus' ? 96 : selected.tier === 'standard' ? 128 : 256;
+  const patchSize = constrained ? Math.max(32, defaultPatch / 2) : defaultPatch;
 
   return {
-    recommendedSystemRamGB: model === 'ultra' ? 32 : 16,
+    recommendedSystemRamGB: selected.tier === 'max' ? 32 : selected.tier === 'plus' ? 24 : selected.tier === 'standard' ? 16 : 8,
     inputMegapixels,
     outputMegapixels,
-    estimatedOutputRGBABytes: pixels * 4 * 4,
+    estimatedOutputRGBABytes: pixels * factor * factor * 4,
     patchSize,
     warnings,
     caution: warnings.length > 0,

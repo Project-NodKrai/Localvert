@@ -33,7 +33,7 @@ export default function UpscalerPage() {
         file,
         type,
         mode: 'upscale',
-        model: 'standard',
+        model: 'esrgan-slim-2x',
         videoMethod: 'filter',
         limitSeconds: 10,
         status: 'storing',
@@ -102,7 +102,9 @@ export default function UpscalerPage() {
     if (task.type === 'image') blob = await upscaleImage(fileObj, task.model, onProgress);
     else if (task.type === 'video') blob = await upscaleVideo(task.id, fileObj, task.videoMethod, task.limitSeconds, onProgress);
     else throw new Error('이미지 또는 동영상만 복원할 수 있습니다.');
-    return { blob, resultName: `upscaled_${task.file.name}` };
+    const stem = task.file.name.replace(/\.[^.]+$/, '');
+    const ext = task.type === 'image' ? 'png' : 'mp4';
+    return { blob, resultName: `upscaled_${stem}.${ext}` };
   };
 
   const { enqueue, cancelTask } =

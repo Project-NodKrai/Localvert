@@ -2,6 +2,7 @@ import { motion } from 'motion/react';
 import { X, Settings, Check } from 'lucide-react';
 import { Task, CompressTask, UpscaleTask } from '../types';
 import { adviseImageUpscale, detectDeviceHints } from '../lib/upscalers/performance';
+import { UPSCALE_CATALOG, UPSCALE_TIERS, TIER_LABELS, normalizeModelId } from '../lib/upscalers/catalog';
 
 interface AdvancedSettingsProps {
   task: Task;
@@ -176,34 +177,47 @@ export default function AdvancedSettings({ task, onUpdate, onClose }: AdvancedSe
 
           {isUpscale && (
              <>
-               {isImage && (
-                  <section className="space-y-3">
-                    <label className="text-sm font-medium text-neutral-300">복원 모델 선택</label>
-                    <div className="grid grid-cols-1 gap-2">
-                       <Option 
-                         selected={(task as UpscaleTask).model === 'standard'}
-                         onClick={() => onUpdate({ model: 'standard' } as any)}
-                         title="Standard (빠름 · ESRGAN Slim 2×)"
-                         desc="경량 모델 · 권장 시스템 RAM 16GB · 12MP 이하 이미지부터 시작"
-                       />
-                       <Option 
-                         selected={(task as UpscaleTask).model === 'ultra'}
-                         onClick={() => onUpdate({ model: 'ultra' } as any)}
-                         title="Ultra (고품질 · ESRGAN Medium 2×)"
-                         desc="고품질 모델 · 권장 시스템 RAM 32GB · 8MP 이하 이미지부터 시작"
-                       />
-                    </div>
-                    {imageAdvice && (
-                      <div className="rounded-xl border border-neutral-700 bg-neutral-800/60 p-3 text-xs text-neutral-300 space-y-2">
-                        <p>예상 출력: {imageAdvice.outputMegapixels.toFixed(1)}MP · 타일: {imageAdvice.patchSize}px</p>
-                        <p>RAM 권장치는 참고용이야. 브라우저가 실제 시스템 RAM과 GPU VRAM을 정확하게 제공하지는 않아.</p>
-                        {imageAdvice.warnings.map(message =>
-                          <p className="text-amber-300" key={message}>{message}</p>
-                        )}
-                        <p className="text-neutral-400">권장 사양에 못 미쳐도 사용자가 선택하면 실행할 수 있어.</p>
-                      </div>
-                    )}
-                  </section>
+               {isImage && task.mode === 'upscale' && (
+                 <section className="space-y-4">
+                   <div>
+                     <label className="text-sm font-medium text-neutral-200">모델 및 성능 등급</label>
+                     <p className="mt-1 text-xs text-neutral-500">등급은 실행 자원 기준이야. 화질 우열을 보증하지 않아.</p>
+                   </div>
+                   <div className="space-y-4">
+                     {UPSCALE_TIERS.map(tier => (
+                       <div key={tier} className="space-y-2">
+                         <h3 className="text-sm font-semibold text-neutral-200">{TIER_LABELS[tier]}</h3>
+                         <div className="grid grid-cols-1 gap-2">
+                           {UPSCALE_CATALOG.filter(entry => entry.tier === tier).map(entry => (
+                             <button
+                               type="button" key={entry.id} disabled={!entry.available}
+                               onClick={() => onUpdate({ model: entry.id as UpscaleTask['model'] })}
+                               aria-pressed={entry.available && normalizeModelId(task.model) === entry.id}
+                               className={`w-full text-left rounded-xl border p-3 transition-colors
+                                 ${!entry.available ? 'cursor-not-allowed border-neutral-800 bg-neutral-900 opacity-50'
+                                   : normalizeModelId(task.model) === entry.id ? 'border-red-500 bg-red-500/10 text-white'
+                                   : 'border-neutral-700 bg-neutral-800/50 hover:border-neutral-500'}`}>
+                               <div className="flex justify-between items-center gap-2">
+                                 <span className="text-sm font-medium">{entry.name}{entry.scale ? ` · ${entry.scale}×` : ''}</span>
+                                 <span className="text-[11px] text-neutral-400">{entry.available ? '사용 가능' : '준비 중'}</span>
+                               </div>
+                               <p className="mt-1 text-xs text-neutral-400">용도: {entry.uses.join(' · ')}</p>
+                               <p className="mt-1 text-[11px] text-neutral-500">{entry.note}</p>
+                             </button>
+                           ))}
+                         </div>
+                       </div>
+                     ))}
+                   </div>
+                   {imageAdvice && (
+                     <div className="rounded-xl border border-neutral-700 bg-neutral-800/60 p-3 text-xs text-neutral-300 space-y-2">
+                       <p>예상 출력: {imageAdvice.outputMegapixels.toFixed(1)}MP · 타일: {imageAdvice.patchSize}px</p>
+                       <p>RAM 권장치는 참고용이며, 브라우저에서 시스템 RAM·VRAM을 정확히 읽을 수는 없어.</p>
+                       {imageAdvice.warnings.map(message => <p className="text-amber-300" key={message}>{message}</p>)}
+                       <p className="text-neutral-400">권장 사양에 못 미쳐도 경고 확인 후 실행할 수 있어.</p>
+                     </div>
+                   )}
+                 </section>
                )}
                {isVideo && (
                   <>
