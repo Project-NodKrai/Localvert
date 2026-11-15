@@ -1,4 +1,6 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
+import { AlertTriangle, X } from 'lucide-react';
 import Header from '../components/Header';
 import FileUploader from '../components/FileUploader';
 import FileList from '../components/FileList';
@@ -17,11 +19,24 @@ function getFileType(file: File): FileType {
   return 'unknown';
 }
 
+type UpscaleSnackbar =
+  | { kind: 'notice'; messages: string[] }
+  | { kind: 'confirm'; messages: string[]; ids: string[] };
+
 export default function UpscalerPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const deviceHints = useMemo(() => detectDeviceHints(), []);
-  const [pendingConfirmation, setPendingConfirmation] = useState<{ ids: string[]; messages: string[] } | null>(null);
+  const [snackbar, setSnackbar] = useState<UpscaleSnackbar | null>(null);
 
+  // Only informational warnings disappear automatically. A confirmation must
+  // remain available until the user chooses Cancel or "그래도 실행".
+  useEffect(() => {
+    if (snackbar?.kind !== 'notice') return;
+    const timeout = window.setTimeout(() => {
+      setSnackbar(current => current === snackbar ? null : current);
+    }, 5500);
+    return () => window.clearTimeout(timeout);
+  }, [snackbar]);
 
   const handleFilesAdded = useCallback(async (files: FileList | File[]) => {
     const fileArray = Array.from(files);
@@ -83,7 +98,22 @@ export default function UpscalerPage() {
   }, []);
 
   const handleTaskUpdate = (id: string, updates: Partial<UpscaleTask>) => {
-    setTasks((prev) => prev.map((t) => (t.id === id && t.mode === 'upscale' ? { ...t, ...updates } : t)));
+    const before = tasks.find(task => task.id === id);
+    if (before?.mode === 'upscale' &&
+      ['model', 'upscaleTier', 'upscalePurpose', 'videoMethod'].some(key => key in updates)) {
+      const next = { ...before, ...updates };
+      if (next.type === 'image' || (next.type === 'video' && next.videoMethod === 'ai')) {
+        const tier = next.upscaleTier ?? activeModel(next.model).tier;
+        const purpose = next.upscalePurpose ?? (next.type === 'video' ? '동영상' : '실사');
+        if (isRunnableSelection(next.model, tier, purpose)) {
+          const warnings = adviseImageUpscale(next.model, next.width ?? 0, next.height ?? 0, deviceHints).warnings;
+          if (warnings.length) setSnackbar({ kind: 'notice', messages: warnings });
+          else setSnackbar(current => current?.kind === 'notice' ? null : current);
+        }
+      }
+    }
+    setTasks(prev => prev.map(task => task.id === id && task.mode === 'upscale'
+      ? { ...task, ...updates } : task));
   };
 
   const handleRemoveTask = (id: string) => {
@@ -142,20 +172,24 @@ export default function UpscalerPage() {
       (task.type === 'image' || (task.type === 'video' && task.videoMethod === 'ai')) &&
       !isRunnableSelection(task.model, task.upscaleTier ?? activeModel(task.model).tier,
         task.upscalePurpose ?? (task.type === 'video' ? '동영상' : '실사')))) {
-      window.alert('선택한 등급과 용도에 실행 가능한 모델이 없어. 설정에서 사용 가능한 모델을 선택해 줘.');
+      setSnackbar({ kind: 'notice', messages: ['선택한 등급과 용도에 실행 가능한 모델이 없어. 설정에서 다른 모델을 선택해 줘.'] });
       return;
     }
     if (warnings.length) {
-      setPendingConfirmation({ ids: chosen.map(task => task.id), messages: warnings });
+      setSnackbar({ kind: 'confirm', ids: chosen.map(task => task.id), messages: warnings });
     } else {
+      setSnackbar(null);
       chosen.forEach(task => enqueue(task.id));
     }
   };
 
   const confirmProcessing = () => {
-    if (!pendingConfirmation) return;
-    pendingConfirmation.ids.forEach(id => enqueue(id));
-    setPendingConfirmation(null);
+    if (snackbar?.kind !== 'confirm') return;
+    const ids = snackbar.ids;
+    setSnackbar(null);
+    ids.forEach(id => {
+      if (tasks.some(task => task.id === id && task.status === 'idle' && task.stored)) enqueue(id);
+    });
   };
 
   const handleRunTask = (id: string) => requestProcessing([id]);
@@ -189,29 +223,39 @@ export default function UpscalerPage() {
           />
         )}
       </main>
-      {pendingConfirmation && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div role="alertdialog" aria-modal="true" aria-labelledby="upscale-warning-title"
-            className="w-full max-w-lg rounded-2xl border border-amber-700/40 bg-neutral-900 p-6 shadow-2xl">
-            <h2 id="upscale-warning-title" className="mb-3 text-lg font-bold text-amber-300">
-              이 기기에서는 복원이 느리거나 실패할 수 있어
-            </h2>
-            <p className="mb-3 text-sm text-neutral-300">
-              권장 사양에 못 미쳐도 직접 실행할 수 있어. 메모리 부족이나 브라우저 종료에 대비해 원본 파일은 보관해 줘.
-            </p>
-            <ul className="mb-5 list-disc space-y-2 pl-5 text-sm text-neutral-300">
-              {pendingConfirmation.messages.map(message => <li key={message}>{message}</li>)}
-            </ul>
-            <div className="flex flex-wrap justify-end gap-3">
-              <button type="button" onClick={() => setPendingConfirmation(null)}
-                className="rounded-lg bg-neutral-700 px-4 py-2 text-white hover:bg-neutral-600">취소</button>
+      {snackbar && typeof document !== 'undefined' && createPortal(
+        <div role="alert" aria-live="assertive"
+          className="fixed bottom-4 left-1/2 z-[100] w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 rounded-2xl border border-amber-700/40 bg-neutral-900 p-4 text-white shadow-2xl sm:bottom-8"
+        >
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" aria-hidden="true" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-amber-200">
+                {snackbar.kind === 'confirm' ? '복원이 느리거나 실패할 수 있어' : '복원 사양 안내'}
+              </p>
+              <div className="mt-1 max-h-28 space-y-1 overflow-y-auto text-xs leading-relaxed text-neutral-300">
+                {snackbar.messages.map(message => <p key={message}>{message}</p>)}
+              </div>
+            </div>
+            <button type="button" aria-label="알림 닫기" onClick={() => setSnackbar(null)}
+              className="shrink-0 rounded-full p-1 text-neutral-400 hover:bg-neutral-800 hover:text-white">
+              <X size={18} />
+            </button>
+          </div>
+          {snackbar.kind === 'confirm' && (
+            <div className="mt-3 flex justify-end gap-2">
+              <button type="button" onClick={() => setSnackbar(null)}
+                className="rounded-lg bg-neutral-700 px-3 py-2 text-sm text-white hover:bg-neutral-600">
+                취소
+              </button>
               <button type="button" onClick={confirmProcessing}
-                className="rounded-lg bg-red-600 px-4 py-2 font-semibold text-white hover:bg-red-500">
+                className="rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-500">
                 그래도 실행
               </button>
             </div>
-          </div>
-        </div>
+          )}
+        </div>,
+        document.body
       )}
     </div>
   );
