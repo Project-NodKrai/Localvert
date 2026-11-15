@@ -27,6 +27,9 @@ export const ACTIVE_MODEL_IDS = [
   'esrgan-slim-2x',
   'esrgan-medium-2x',
   'esrgan-medium-4x',
+  'anime4k-v4-s-2x',
+  'anime4k-v4-m-2x',
+  'anime4k-v4-l-2x',
   'quicksrnet-small-4x',
   'quicksrnet-medium-4x',
   'realesr-general-x4v3',
@@ -62,6 +65,9 @@ export type ModelRecord = {
 };
 
 export const UPSCALE_CATALOG: readonly ModelRecord[] = [
+  { id: 'anime4k-v4-s-2x', name: 'Anime4K v4 S', tier: 'nano', uses: ['일러스트', '애니메이션', '동영상'], scale: 2, available: true },
+  { id: 'anime4k-v4-m-2x', name: 'Anime4K v4 M', tier: 'lite', uses: ['일러스트', '애니메이션', '동영상'], scale: 2, available: true },
+  { id: 'anime4k-v4-l-2x', name: 'Anime4K v4 L', tier: 'standard', uses: ['일러스트', '애니메이션', '동영상'], scale: 2, available: true },
   { id: 'quicksrnet-small-4x', name: 'QuickSRNet Small', tier: 'nano', uses: ['실사', '동영상'], scale: 4, available: true },
   { id: 'quicksrnet-medium-4x', name: 'QuickSRNet Medium', tier: 'lite', uses: ['실사', '동영상'], scale: 4, available: true },
   { id: 'nomosuni-span-2x', name: 'NomosUni SPAN 2×', tier: 'lite', uses: ['실사', '동영상'], scale: 2, available: true },
