@@ -64,7 +64,7 @@ export function scaleFilter(resolution: VideoResolution): string | null {
   const height = resolution === '1080p' ? 1080 : resolution === '720p' ? 720 : resolution === '480p' ? 480 : null;
   if (!height) return null;
   // Keep orientation and aspect ratio, never upscale; H.264 requires even dimensions.
-  return 'scale=w=1920:h=' + height + ':force_original_aspect_ratio=decrease:force_divisible_by=2';
+  return "scale=w='min(iw,1920)':h='min(ih," + height + ")':force_original_aspect_ratio=decrease:force_divisible_by=2";
 }
 
 export function outputIsSmaller(candidateBytes: number, originalBytes: number): boolean {
