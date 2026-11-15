@@ -129,7 +129,7 @@ export default function FileList({
                       <div className="flex flex-col items-end gap-0.5">
                         <span className="text-[10px] text-neutral-500 font-bold uppercase tracking-tight">AI Upscale</span>
                         <span className="text-xs text-red-500 font-mono font-bold">
-                          {(task as UpscaleTask).type === 'image' ? modelDisplayName((task as UpscaleTask).model) : (task as UpscaleTask).videoMethod.toUpperCase()}
+                          {((task as UpscaleTask).type === 'image' || ((task as UpscaleTask).type === 'video' && (task as UpscaleTask).videoMethod === 'ai')) ? modelDisplayName((task as UpscaleTask).model) : (task as UpscaleTask).videoMethod.toUpperCase()}
                         </span>
                         {(task as UpscaleTask).width && (task as UpscaleTask).width! > 4000 && (
                           <div className="group relative">

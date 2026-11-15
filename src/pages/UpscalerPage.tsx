@@ -34,9 +34,9 @@ export default function UpscalerPage() {
         file,
         type,
         mode: 'upscale',
-        model: 'esrgan-slim-2x',
-        upscaleTier: 'standard',
-        upscalePurpose: '실사',
+        model: type === 'video' ? 'quicksrnet-small-4x' : 'esrgan-slim-2x',
+        upscaleTier: type === 'video' ? 'nano' : 'standard',
+        upscalePurpose: type === 'video' ? '동영상' : '실사',
         videoMethod: 'filter',
         limitSeconds: 10,
         status: 'storing',
@@ -101,13 +101,14 @@ export default function UpscalerPage() {
     if (!storedFile) throw new Error('File not found in local storage');
     const fileObj = new File([storedFile], task.file.name, { type: task.file.type });
     if (task.mode !== 'upscale') throw new Error('Invalid task type');
-    if (task.type === 'image' &&
-      !isRunnableSelection(task.model, task.upscaleTier ?? activeModel(task.model).tier, task.upscalePurpose ?? '실사')) {
+    if ((task.type === 'image' || (task.type === 'video' && task.videoMethod === 'ai')) &&
+      !isRunnableSelection(task.model, task.upscaleTier ?? activeModel(task.model).tier,
+        task.upscalePurpose ?? (task.type === 'video' ? '동영상' : '실사'))) {
       throw new Error('선택한 등급과 용도에 실행 가능한 모델이 없어. 복원 설정에서 모델을 다시 선택해 줘.');
     }
     let blob: Blob;
     if (task.type === 'image') blob = await upscaleImage(fileObj, task.model, onProgress);
-    else if (task.type === 'video') blob = await upscaleVideo(task.id, fileObj, task.videoMethod, task.limitSeconds, onProgress);
+    else if (task.type === 'video') blob = await upscaleVideo(task.id, fileObj, task.videoMethod, task.limitSeconds, onProgress, task.model);
     else throw new Error('이미지 또는 동영상만 복원할 수 있습니다.');
     const stem = task.file.name.replace(/\.[^.]+$/, '');
     const ext = task.type === 'image' ? 'png' : 'mp4';
@@ -131,12 +132,16 @@ export default function UpscalerPage() {
           if (!warnings.includes(warning)) warnings.push(warning);
         }
       } else if (task.type === 'video' && task.videoMethod === 'ai') {
-        const message = '동영상 AI 복원은 프레임 전체를 변환하므로 긴 영상에서 메모리 부족이나 장시간 처리가 발생할 수 있어.';
+        const advice = adviseImageUpscale(task.model, task.width ?? 0, task.height ?? 0, deviceHints);
+        for (const warning of advice.warnings) if (!warnings.includes(warning)) warnings.push(warning);
+        const message = '동영상 AI 복원은 영상의 모든 프레임을 순서대로 처리해서 시간이 오래 걸릴 수 있어.';
         if (!warnings.includes(message)) warnings.push(message);
       }
     }
-    if (chosen.some(task => task.mode === 'upscale' && task.type === 'image' &&
-      !isRunnableSelection(task.model, task.upscaleTier ?? activeModel(task.model).tier, task.upscalePurpose ?? '실사'))) {
+    if (chosen.some(task => task.mode === 'upscale' &&
+      (task.type === 'image' || (task.type === 'video' && task.videoMethod === 'ai')) &&
+      !isRunnableSelection(task.model, task.upscaleTier ?? activeModel(task.model).tier,
+        task.upscalePurpose ?? (task.type === 'video' ? '동영상' : '실사')))) {
       window.alert('선택한 등급과 용도에 실행 가능한 모델이 없어. 설정에서 사용 가능한 모델을 선택해 줘.');
       return;
     }
