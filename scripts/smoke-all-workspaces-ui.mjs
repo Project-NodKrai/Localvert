@@ -21,7 +21,7 @@ try {
     page.on('pageerror', error => errors.push(error.message));
     await page.goto('http://127.0.0.1:3000/', { waitUntil: 'domcontentloaded' });
     await page.getByRole('heading', { name: '파일 변환', exact: true }).waitFor({ state: 'visible', timeout: 25000 });
-    if (await page.locator('.lv-app').evaluate(el => getComputedStyle(el).backgroundColor) !== 'rgb(247, 249, 253)') {
+    if (await page.locator('.lv-app:visible').evaluate(el => getComputedStyle(el).backgroundColor) !== 'rgb(247, 249, 253)') {
       throw new Error('Converter is not using the shared canvas background at ' + width);
     }
     if (await page.evaluate(() => document.documentElement.scrollWidth) > width + 1) {
