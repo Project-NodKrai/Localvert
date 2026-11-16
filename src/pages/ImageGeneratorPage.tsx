@@ -147,8 +147,18 @@ export default function ImageGeneratorPage() {
       const value = JSON.parse(await file.text()) as unknown;
       const graph = parseComfyWorkflow(value);
       setWorkflow(graph);
-      setBindings(detectBindings(graph));
+      const mapped = detectBindings(graph);
+      setBindings(mapped);
       setWorkflowName(file.name);
+      // Keep the imported workflow's sampler/scheduler rather than silently
+      // replacing model-specific defaults on the first generation.
+      const samplerValue = mapped.sampler && graph[mapped.sampler.nodeId]?.inputs[mapped.sampler.field];
+      const schedulerValue = mapped.scheduler && graph[mapped.scheduler.nodeId]?.inputs[mapped.scheduler.field];
+      setConfig(previous => ({
+        ...previous,
+        sampler: typeof samplerValue === 'string' ? samplerValue : previous.sampler,
+        scheduler: typeof schedulerValue === 'string' ? schedulerValue : previous.scheduler,
+      }));
       setShowConnection(true);
       setError('');
     } catch (cause) {
@@ -193,6 +203,11 @@ export default function ImageGeneratorPage() {
       validateWorkflowModel(selectedWorkflow, selected);
       await fetchComfyStatus(endpointSnapshot, controller.signal);
       setConnection('ready');
+      if (!Number.isInteger(snapshot.batchCount) || snapshot.batchCount < 1 || snapshot.batchCount > 3 ||
+          !Number.isInteger(snapshot.batchSize) || snapshot.batchSize < 1 || snapshot.batchSize > 4 ||
+          ![snapshot.width, snapshot.height].every(n => Number.isInteger(n) && n >= 256 && n <= 2048 && n % 64 === 0)) {
+        throw new Error('생성 개수는 1~3회, 배치 크기는 1~4개, 해상도는 256~2048px(64px 단위)로 지정해.');
+      }
       for (let index = 0; index < snapshot.batchCount; index++) {
         const seed = nextSeed(snapshot.randomSeed, snapshot.seed, index);
         const jobId = crypto.randomUUID();
@@ -384,7 +399,7 @@ export default function ImageGeneratorPage() {
           </div>
           {!workflow && <p className="gen-help">이미지를 생성하려면 아래에서 ComfyUI 워크플로를 연결해.</p>}
           {workflow && !modelMatched && <p className="gen-help" role="status">
-            선택 모델의 체크포인트를 워크플로에서 확인하지 못했어. 해당 모델의 API 워크플로를 가져와.
+            선택 모델에 해당하는 체크포인트 파일명을 워크플로에서 찾지 못했어. 해당 모델의 API 워크플로를 가져와.
           </p>}
           {workflow && !promptBound && <p className="gen-help">프롬프트 입력 노드를 연결해야 해.</p>}
           {busy || progress ? <p className="gen-progress" role="status">{progress}</p> : null}
@@ -422,7 +437,7 @@ export default function ImageGeneratorPage() {
           {workflow && (
             <>
               <p className={modelMatched ? 'gen-workflow-ok' : 'gen-help'}>
-                {modelMatched ? '체크포인트 확인: ' + availableResources.join(', ') :
+                {modelMatched ? '체크포인트 파일명 일치: ' + availableResources.join(', ') :
                   '현재 선택 모델에 일치하는 체크포인트가 없어.'}
               </p>
               <details className="gen-details" open={showMapping}

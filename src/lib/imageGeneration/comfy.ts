@@ -166,7 +166,9 @@ export function prepareComfyPrompt(
   if (fieldExists(workflow, bindings.steps)) {
     write('steps', Math.max(model.steps.min, Math.min(model.steps.max, Math.round(config.steps))));
   }
-  if (model.cfg !== null) write('cfg', model.cfg);
+  // Distilled models still require the workflow to use their supported
+  // guidance value; hiding the slider alone is not sufficient.
+  if (fieldExists(workflow, bindings.cfg)) write('cfg', model.cfg ?? 1);
   if (bindings.sampler && config.sampler) write('sampler', config.sampler);
   if (bindings.scheduler && config.scheduler) write('scheduler', config.scheduler);
   write('width', config.width);
@@ -274,12 +276,12 @@ export async function runComfyWorkflow(args: {
       }
     }
     await new Promise<void>((resolve, reject) => {
-      const timer = window.setTimeout(() => {
+      const timer = globalThis.setTimeout(() => {
         signal.removeEventListener('abort', aborted);
         resolve();
       }, 1100);
       const aborted = () => {
-        window.clearTimeout(timer);
+        globalThis.clearTimeout(timer);
         reject(new DOMException('작업 결과 받기가 중단됐어.', 'AbortError'));
       };
       signal.addEventListener('abort', aborted, { once: true });
