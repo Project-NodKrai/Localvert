@@ -23,6 +23,13 @@ const features = [
     description: '실사, 일러스트, 애니메이션 및 동영상에 맞는 AI 모델과 복원 등급을 선택해.',
     action: '복원 화면 열기',
   },
+  {
+    to: '/generate',
+    icon: 'generate',
+    title: '이미지 생성',
+    description: '텍스트 프롬프트와 생성 설정을 조정하고 로컬 ComfyUI에서 이미지를 생성해.',
+    action: '생성 화면 열기',
+  },
 ] as const;
 
 export default function DetailsPage() {
@@ -70,7 +77,7 @@ export default function DetailsPage() {
 }
 
 
-type Glyph = 'convert' | 'compress' | 'upscale' | 'privacy';
+type Glyph = 'convert' | 'compress' | 'upscale' | 'generate' | 'privacy';
 
 /** Product-specific 24px geometry; no new icon library or theme preset. */
 function FeatureGlyph({ type }: { type: Glyph }) {
@@ -91,6 +98,10 @@ function FeatureGlyph({ type }: { type: Glyph }) {
         <rect x="3" y="6" width="15" height="14" rx="2" />
         <circle cx="8" cy="10" r="1.5" />
         <path d="m4.5 18 4.5-4 3 2 3-3 2 2.5M20 2v7m-3.5-3.5h7" />
+      </>}
+      {type === 'generate' && <>
+        <path d="m12 2 2.2 6.1L20.5 10l-6.3 1.9L12 18l-2.2-6.1L3.5 10l6.3-1.9L12 2Z" />
+        <path d="m19 16 1 2.5 2.5 1L20 20.5 19 23l-1-2.5-2.5-1 2.5-1L19 16Z" />
       </>}
       {type === 'privacy' && <>
         <path d="M12 2.5 20 6v6.5c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3.5Z" />

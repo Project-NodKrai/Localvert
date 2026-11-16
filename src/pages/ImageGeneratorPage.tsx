@@ -5,10 +5,10 @@ import {
   GENERATION_LEVELS, GENERATION_MODELS, DEFAULT_MODEL_BY_LEVEL,
   generationModel, defaultGenerationConfig,
 } from '../lib/imageGeneration/catalog';
-import type { GenerationConfig, GenerationLevel, GenerationModel } from '../lib/imageGeneration/catalog';
+import type { GenerationConfig, GenerationLevel } from '../lib/imageGeneration/catalog';
 import {
   parseComfyWorkflow, detectBindings, fieldExists, listFields,
-  validateWorkflowModel, normalizeComfyUrl, fetchComfyStatus, runComfyWorkflow,
+  validateWorkflowModel, fetchComfyStatus, runComfyWorkflow,
 } from '../lib/imageGeneration/comfy';
 import type { ComfyWorkflow, WorkflowBindings, FieldRef } from '../lib/imageGeneration/comfy';
 import '../styles/image-generation.css';
@@ -39,7 +39,7 @@ const BINDING_LABELS: Array<{ key: keyof WorkflowBindings; label: string }> = [
   { key: 'loraStrength', label: 'LoRA Strength' },
 ];
 
-function saveBlob(blob: Blob, filename: string): string {
+function saveBlob(blob: Blob): string {
   const href = URL.createObjectURL(blob);
   return href;
 }
@@ -106,12 +106,11 @@ export default function ImageGeneratorPage() {
   })() : [];
   const modelMatched = availableResources.length > 0;
   const promptBound = !!workflow && fieldExists(workflow, bindings.prompt);
-  const connected = connection === 'ready';
   const canGenerate = !!workflow && modelMatched && promptBound && !!config.prompt.trim() && !busy;
   const modelsInLevel = GENERATION_MODELS.filter(item => item.level === level);
 
   function registerUrl(blob: Blob): string {
-    const href = saveBlob(blob, '');
+    const href = saveBlob(blob);
     urlsRef.current.add(href);
     return href;
   }
@@ -280,7 +279,7 @@ export default function ImageGeneratorPage() {
             </>
           )}
           <div className="gen-field-row">
-            <label className="gen-label" htmlFor="gen-ratio">화면 비율</label>
+            <span className="gen-label">화면 비율</span>
             <span className="gen-muted">{config.width} × {config.height}</span>
           </div>
           <div className="gen-ratio-options" role="group" aria-label="해상도 프리셋">

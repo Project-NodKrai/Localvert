@@ -4,6 +4,7 @@ const pages = [
   { to: '/', label: '변환' },
   { to: '/compress', label: '압축' },
   { to: '/upscale', label: '고화질 복원' },
+  { to: '/generate', label: '이미지 생성' },
   { to: '/details', label: '기능 안내' },
 ] as const;
 
