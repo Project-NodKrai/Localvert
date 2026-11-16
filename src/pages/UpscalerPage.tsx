@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertTriangle, X } from 'lucide-react';
 import Header from '../components/Header';
-import FileUploader from '../components/FileUploader';
-import FileList from '../components/FileList';
+import UpscaleStudio from '../components/upscale/UpscaleStudio';
+import { DEFAULT_STUDIO_PROFILES, updateStudioProfile, isStudioProfileRunnable } from '../lib/upscalers/studio';
+import type { StudioMedia, StudioProfile } from '../lib/upscalers/studio';
 import { Task, UpscaleTask, FileType } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { upscaleImage, upscaleVideo } from '../lib/upscalers';
@@ -25,6 +26,9 @@ type UpscaleSnackbar =
 
 export default function UpscalerPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [studioMedia, setStudioMedia] = useState<StudioMedia>('image');
+  const [studioProfiles, setStudioProfiles] =
+    useState<Record<StudioMedia, StudioProfile>>(DEFAULT_STUDIO_PROFILES);
   const deviceHints = useMemo(() => detectDeviceHints(), []);
   const [snackbar, setSnackbar] = useState<UpscaleSnackbar | null>(null);
 
@@ -43,17 +47,17 @@ export default function UpscalerPage() {
     const newTasks: Task[] = fileArray.map((file) => {
       const id = uuidv4();
       const type = getFileType(file);
-      
+      const profile = type === 'video' ? studioProfiles.video : studioProfiles.image;
       return {
         id,
         file,
         type,
         mode: 'upscale',
-        model: type === 'video' ? 'quicksrnet-small-4x' : 'esrgan-slim-2x',
-        upscaleTier: type === 'video' ? 'nano' : 'standard',
-        upscalePurpose: type === 'video' ? '동영상' : '실사',
-        videoMethod: 'filter',
-        limitSeconds: 10,
+        model: profile.model,
+        upscaleTier: profile.upscaleTier,
+        upscalePurpose: profile.upscalePurpose,
+        videoMethod: profile.videoMethod,
+        limitSeconds: profile.limitSeconds,
         status: 'storing',
         progress: 0,
         stored: false,
@@ -95,25 +99,33 @@ export default function UpscalerPage() {
         );
       }
     }
-  }, []);
+  }, [studioProfiles]);
 
-  const handleTaskUpdate = (id: string, updates: Partial<UpscaleTask>) => {
-    const before = tasks.find(task => task.id === id);
-    if (before?.mode === 'upscale' &&
-      ['model', 'upscaleTier', 'upscalePurpose', 'videoMethod'].some(key => key in updates)) {
-      const next = { ...before, ...updates };
-      if (next.type === 'image' || (next.type === 'video' && next.videoMethod === 'ai')) {
-        const tier = next.upscaleTier ?? activeModel(next.model).tier;
-        const purpose = next.upscalePurpose ?? (next.type === 'video' ? '동영상' : '실사');
-        if (isRunnableSelection(next.model, tier, purpose)) {
-          const warnings = adviseImageUpscale(next.model, next.width ?? 0, next.height ?? 0, deviceHints).warnings;
-          if (warnings.length) setSnackbar({ kind: 'notice', messages: warnings });
-          else setSnackbar(current => current?.kind === 'notice' ? null : current);
-        }
-      }
+  const handleStudioProfileChange = (updates: Partial<StudioProfile>) => {
+    const next = updateStudioProfile(studioProfiles[studioMedia], updates);
+    setStudioProfiles(prev => ({ ...prev, [studioMedia]: next }));
+    // Apply the studio preset to all pending files of this media type;
+    // never mutate a queued/running/completed job.
+    const affected = tasks.filter(task => task.mode === 'upscale' &&
+      task.type === studioMedia && task.status === 'idle') as UpscaleTask[];
+    setTasks(prev => prev.map(task => (
+      task.mode === 'upscale' && task.type === studioMedia && task.status === 'idle'
+        ? { ...task,
+            model: next.model, upscaleTier: next.upscaleTier,
+            upscalePurpose: next.upscalePurpose,
+            videoMethod: next.videoMethod, limitSeconds: next.limitSeconds,
+          }
+        : task
+    )));
+    if (isStudioProfileRunnable(next, studioMedia) &&
+      (studioMedia === 'image' || next.videoMethod === 'ai')) {
+      const warnings = [...new Set(affected.flatMap(task =>
+        adviseImageUpscale(next.model, task.width ?? 0, task.height ?? 0, deviceHints).warnings))];
+      if (warnings.length) setSnackbar({ kind: 'notice', messages: warnings });
+      else setSnackbar(current => current?.kind === 'notice' ? null : current);
+    } else {
+      setSnackbar(current => current?.kind === 'notice' ? null : current);
     }
-    setTasks(prev => prev.map(task => task.id === id && task.mode === 'upscale'
-      ? { ...task, ...updates } : task));
   };
 
   const handleRemoveTask = (id: string) => {
@@ -196,41 +208,27 @@ export default function UpscalerPage() {
   const handleRunAll = () => requestProcessing(tasks.filter(task => task.status === 'idle').map(task => task.id));
 
   return (
-    <div className="min-h-screen bg-neutral-900 text-white font-sans selection:bg-red-500/30">
-      <Header />
-      <main className="pt-12 pb-24 px-4 w-full max-w-5xl mx-auto flex flex-col items-center">
-        <div className="text-center mb-12">
-          <h1 className="text-4xl md:text-5xl font-bold mb-4 text-white tracking-tight">AI 고화질 복원</h1>
-          <h2 className="text-xl text-neutral-400 font-light max-w-2xl">
-            저화질의 사진과 영상을 AI 딥러닝 기술로 선명하게 되살려보세요. 100% 로컬에서 작동합니다.
-          </h2>
-        </div>
-
-        {tasks.length === 0 ? (
-          <FileUploader onFilesAdded={handleFilesAdded} mode="upscale" />
-        ) : (
-          <FileList
-            tasks={tasks}
-            mode="upscale"
-            onFormatChange={() => {}}
-            onQualityChange={() => {}}
-            onTaskUpdate={(id, updates) => handleTaskUpdate(id, updates as Partial<UpscaleTask>)}
-            onFormatChangeAll={() => {}}
-            onRemove={handleRemoveTask}
-            onProcess={handleRunTask}
-            onProcessAll={handleRunAll}
-            onAddMore={handleFilesAdded}
-          />
-        )}
-      </main>
+    <div className="min-h-screen bg-[#F7F9FD] text-[#1B2741] font-sans selection:bg-[#3C7AF2]/20">
+      <Header variant="upscale" />
+      <UpscaleStudio
+        tasks={tasks.filter((task): task is UpscaleTask => task.mode === 'upscale')}
+        media={studioMedia}
+        profile={studioProfiles[studioMedia]}
+        onMediaChange={setStudioMedia}
+        onProfileChange={handleStudioProfileChange}
+        onFilesAdded={handleFilesAdded}
+        onProcess={handleRunTask}
+        onProcessAll={handleRunAll}
+        onRemove={handleRemoveTask}
+      />
       {snackbar && typeof document !== 'undefined' && createPortal(
         <div role="alert" aria-live="assertive"
-          className={`fixed left-1/2 z-[100] w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 rounded-2xl border border-amber-700/40 bg-neutral-900 p-4 text-white shadow-2xl ${snackbar.kind === 'notice' ? 'top-4 sm:top-6' : 'bottom-4 sm:bottom-8'}`}
+          className={`fixed left-1/2 z-[100] w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 rounded-2xl border border-[#45536F] bg-[#25324E] p-4 text-white shadow-[0_12px_30px_rgba(12,23,48,.25)] ${snackbar.kind === 'notice' ? 'top-4 sm:top-6' : 'bottom-4 sm:bottom-8'}`}
         >
           <div className="flex items-start gap-3">
-            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" aria-hidden="true" />
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-[#F3C96F]" aria-hidden="true" />
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-amber-200">
+              <p className="text-sm font-semibold text-[#F6D98E]">
                 {snackbar.kind === 'confirm' ? '복원이 느리거나 실패할 수 있어' : '복원 사양 안내'}
               </p>
               <div className="mt-1 max-h-28 space-y-1 overflow-y-auto text-xs leading-relaxed text-neutral-300">
@@ -249,7 +247,7 @@ export default function UpscalerPage() {
                 취소
               </button>
               <button type="button" onClick={confirmProcessing}
-                className="rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-500">
+                className="rounded-lg bg-[#276DF7] px-3 py-2 text-sm font-semibold text-white hover:bg-[#1758DA]">
                 그래도 실행
               </button>
             </div>

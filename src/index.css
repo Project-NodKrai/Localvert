@@ -155,3 +155,18 @@
   box-shadow: 0 1px 5px rgb(0 0 0 / 0.25);
 }
 .upscale-tier-range:focus-visible { outline: 2px solid #60a5fa; }
+
+
+/* Concept-2 blue progress rail only inside the light upscale model sheet. */
+.upscale-tier-range.upscale-light-range {
+  background: linear-gradient(to right, #2f72fa 0 var(--upscale-progress),
+    #e5eaf4 var(--upscale-progress) 100%);
+}
+.upscale-tier-range.upscale-light-range::-webkit-slider-thumb {
+  border-color: #d6deed;
+  box-shadow: 0 2px 9px rgb(46 79 139 / 20%);
+}
+.upscale-tier-range.upscale-light-range::-moz-range-thumb {
+  border-color: #d6deed;
+  box-shadow: 0 2px 9px rgb(46 79 139 / 20%);
+}
