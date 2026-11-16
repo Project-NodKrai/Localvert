@@ -220,6 +220,52 @@ try {
     throw new Error('Three model runs produced byte-identical MP4');
   }
   if (new Set(evidence.video.map(item => item.inputSha256)).size !== 1) throw new Error('Video source differs between runs');
+  // Deliberately overlap A/B/C ONNX loads and runs. An active session must
+  // not be released by another model's 2-entry LRU eviction.
+  const parallel = await page.evaluate(async configs => {
+    const { upscaleOnnxImage } = await import('/src/lib/upscalers/onnx.ts');
+    const { makeUpscaleJobSnapshot, UpscaleExecutionTrace } =
+      await import('/src/lib/upscalers/executionTrace.ts');
+    const canvas = document.createElement('canvas');
+    canvas.width = 5;
+    canvas.height = 3;
+    const context = canvas.getContext('2d');
+    context.fillStyle = '#12aadd';
+    context.fillRect(0, 0, 5, 3);
+    context.fillStyle = '#bd1244';
+    context.fillRect(2, 0, 2, 3);
+    const input = await new Promise((resolve, reject) => canvas.toBlob(
+      value => value ? resolve(value) : reject(new Error('Parallel PNG missing')), 'image/png'));
+    const file = new File([input], 'race.png', { type: 'image/png' });
+    return Promise.all(configs.map(async config => {
+      const snapshot = makeUpscaleJobSnapshot({
+        id: 'parallel-' + config.id, file, mode: 'upscale', type: 'image',
+        status: 'processing', progress: 0, stored: true,
+        model: config.id, upscaleTier: config.tier, upscalePurpose: '실사',
+        videoMethod: 'ai',
+      });
+      const trace = new UpscaleExecutionTrace(snapshot);
+      const blob = await upscaleOnnxImage(file, config.id, undefined, trace);
+      return await trace.finish(file, blob);
+    }));
+  }, examples);
+  for (let i = 0; i < examples.length; i++) {
+    if (parallel[i].effectiveModelId !== examples[i].id ||
+        !parallel[i].modelGraphSha256 ||
+        parallel[i].inferenceCalls < 1) {
+      throw new Error('Concurrent ONNX session was swapped or released early: ' + JSON.stringify(parallel[i]));
+    }
+  }
+  if (new Set(parallel.map(item => item.modelGraphSha256)).size !== 3) {
+    throw new Error('Concurrent ONNX sessions were bound to duplicate graphs');
+  }
+  evidence.concurrent = parallel.map(item => ({
+    jobId: item.jobId, effectiveModelId: item.effectiveModelId,
+    modelResource: item.resource, modelGraphSha256: item.modelGraphSha256,
+    outputSha256: item.outputSha256,
+  }));
+  console.log('PASS concurrent ONNX A/B/C model loads, execution leases and independent graph hashes');
+
   if (errors.length) throw new Error('Browser errors: ' + errors.join(' | '));
   writeFileSync('identity-evidence.json', JSON.stringify(evidence, null, 2) + '\n');
   console.log('PASS video A->B->C session/resource/frame/download identity');
