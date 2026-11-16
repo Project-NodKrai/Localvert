@@ -103,19 +103,16 @@ export default function CompressorPage() {
     useTaskQueue(tasks, setTasks, processTask);
 
   return (
-    <div className="min-h-screen bg-neutral-900 text-white font-sans selection:bg-red-500/30">
+    <div className="lv-app">
       <Header />
-      <main className="pt-12 pb-24 px-4 w-full max-w-5xl mx-auto flex flex-col items-center">
-        <div className="text-center mb-12">
-          <h1 className="text-4xl md:text-5xl font-bold mb-4 text-white tracking-tight">용량 압축</h1>
-          <h2 className="text-xl text-neutral-400 font-light max-w-2xl">
-            이미지와 영상 파일의 용량을 로컬에서 안전하게 줄여보세요.
-          </h2>
-        </div>
-
-        {tasks.length === 0 ? (
-          <FileUploader onFilesAdded={handleFilesAdded} mode="compress" />
-        ) : (
+      <main className="lv-workspace">
+        <header className="lv-page-intro">
+          <div className="lv-page-eyebrow">LOCALVERT / COMPRESS</div>
+          <h1>용량 압축</h1>
+          <p>이미지와 영상의 용량을 줄이고 파일별 강도와 출력 옵션을 조절해.</p>
+        </header>
+        <FileUploader onFilesAdded={handleFilesAdded} mode="compress" />
+        {tasks.length > 0 && (
           <FileList
             tasks={tasks}
             mode="compress"
@@ -129,6 +126,7 @@ export default function CompressorPage() {
             onAddMore={handleFilesAdded}
           />
         )}
+        <p className="lv-workspace-note">파일 처리 작업은 이 브라우저에서 실행돼.</p>
       </main>
     </div>
   );
