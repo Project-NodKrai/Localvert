@@ -28,6 +28,7 @@ export default function StudioLevelDock({
   function pointerDown(event: PointerEvent<HTMLButtonElement>) {
     if (event.pointerType === 'mouse' && event.button !== 0) return;
     startY.current = event.clientY;
+    try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* Pointer capture may be unavailable. */ }
   }
 
   function pointerUp(event: PointerEvent<HTMLButtonElement>) {
