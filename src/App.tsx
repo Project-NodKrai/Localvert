@@ -4,6 +4,7 @@ import DetailsPage from './pages/DetailsPage';
 import ConverterPage from './pages/ConverterPage';
 import CompressorPage from './pages/CompressorPage';
 import UpscalerPage from './pages/UpscalerPage';
+import ImageGeneratorPage from './pages/ImageGeneratorPage';
 import { clearStorage } from './lib/storage';
 
 /**
@@ -20,8 +21,9 @@ function PersistentWorkspaces() {
       <div hidden={pathname !== '/'}><ConverterPage /></div>
       <div hidden={pathname !== '/compress'}><CompressorPage /></div>
       <div hidden={pathname !== '/upscale'}><UpscalerPage /></div>
+      <div hidden={pathname !== '/generate'}><ImageGeneratorPage /></div>
       {isDetails && <DetailsPage />}
-      {!['/', '/compress', '/upscale', '/details', '/세부페이지'].includes(pathname) && (
+      {!['/', '/compress', '/upscale', '/generate', '/details', '/세부페이지'].includes(pathname) && (
         <Routes>
           <Route path="*" element={<DetailsPage />} />
         </Routes>
