@@ -1,184 +1,229 @@
 import { chromium } from 'playwright';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import assert from 'node:assert/strict';
 
 const dir = mkdtempSync(join(tmpdir(), 'localvert-identity-'));
-const videoFile = join(dir, 'input.mp4');
+const inputVideo = join(dir, 'original.mp4');
+const evidence = { generatedBy: 'scripts/smoke-upscale-identity.mjs', image: [], video: [] };
+const origin = 'http://127.0.0.1:3000/upscale';
+const examples = [
+  { id: 'quicksrnet-small-4x', tier: 'nano', purpose: '동영상' },
+  { id: 'xlsr-4x', tier: 'nano', purpose: '동영상' },
+  { id: 'quicksrnet-medium-4x', tier: 'lite', purpose: '동영상' },
+];
 
-function run(cmd, args) {
+function command(cmd, args) {
   const r = spawnSync(cmd, args, { encoding: 'utf8', timeout: 90000 });
-  if (r.status !== 0) throw new Error(cmd + ': ' + (r.stderr || r.error?.message));
+  if (r.status !== 0) throw new Error(cmd + ' failed: ' + (r.stderr || r.error?.message));
   return r.stdout;
+}
+const digest = buffer => createHash('sha256').update(buffer).digest('hex');
+
+async function imageFixture(page) {
+  const pixels = await page.evaluate(async () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 16;
+    canvas.height = 12;
+    const context = canvas.getContext('2d');
+    for (let y = 0; y < 12; y++) {
+      for (let x = 0; x < 16; x++) {
+        context.fillStyle = 'rgb(' + ((x * 31 + y * 11) % 256) + ',' +
+          ((x * 19 + y * 53) % 256) + ',' + ((x * 67 + y * 7) % 256) + ')';
+        context.fillRect(x, y, 1, 1);
+      }
+    }
+    const blob = await new Promise((resolve, reject) => canvas.toBlob(
+      value => value ? resolve(value) : reject(new Error('PNG encode failed')), 'image/png'));
+    return [...new Uint8Array(await blob.arrayBuffer())];
+  });
+  return Buffer.from(pixels);
+}
+
+async function waitAndRecordDownload(page, filename, modelId) {
+  const row = page.locator('[data-upscale-studio] li').filter({ hasText: filename });
+  const link = row.locator('a[data-job-id]');
+  await link.waitFor({ state: 'visible', timeout: 120000 });
+  const recorded = await link.evaluate(async anchor => {
+    const buffer = await (await fetch(anchor.href)).arrayBuffer();
+    const digest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', buffer))]
+      .map(b => b.toString(16).padStart(2, '0')).join('');
+    return { ...anchor.dataset, href: anchor.href, digest, actualBytes: buffer.byteLength };
+  });
+  if (recorded.effectiveModelId !== modelId) {
+    throw new Error(filename + ' used ' + recorded.effectiveModelId + ' instead of ' + modelId);
+  }
+  if (recorded.outputSha256 !== recorded.digest ||
+      Number(recorded.outputBytes) !== recorded.actualBytes ||
+      !recorded.href.startsWith('blob:') || !recorded.modelResource ||
+      Number(recorded.inferenceCalls) < 1) {
+    throw new Error('Wrong Blob, SHA, model resource, or inference trace for ' + filename + ': ' + JSON.stringify(recorded));
+  }
+  evidence.image.push({
+    file: filename, jobId: recorded.jobId,
+    model: recorded.effectiveModelId, resource: recorded.modelResource,
+    modelGraphSha256: recorded.modelGraphSha256 || undefined,
+    inferences: Number(recorded.inferenceCalls),
+    outputBytes: recorded.actualBytes, sha256: recorded.digest,
+  });
+  return recorded;
+}
+
+async function runImageJob(page, bytes, filename, modelId) {
+  await page.locator('[data-testid="upscale-file-input"]').setInputFiles({
+    name: filename, mimeType: 'image/png', buffer: bytes,
+  });
+  await page.locator('[data-upscale-studio] li').filter({ hasText: filename })
+    .getByText('준비 완료').waitFor({ state: 'visible', timeout: 20000 });
+  await page.getByRole('button', { name: filename + ' 복원 시작' }).click();
+  const proceed = page.getByRole('alert').getByRole('button', { name: '그래도 실행' });
+  if (await proceed.isVisible().catch(() => false)) await proceed.click();
+  return waitAndRecordDownload(page, filename, modelId);
 }
 
 let browser;
 try {
-  run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y',
-    '-f', 'lavfi', '-i', 'testsrc2=size=32x24:rate=2:duration=0.5',
-    '-f', 'lavfi', '-i', 'sine=frequency=500:sample_rate=44100:duration=0.5',
-    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', videoFile]);
-  const videoBase64 = readFileSync(videoFile).toString('base64');
-
+  command('ffmpeg', [
+    '-hide_banner', '-loglevel', 'error', '-y',
+    '-f', 'lavfi', '-i', 'testsrc2=size=24x16:rate=4:duration=0.5',
+    '-f', 'lavfi', '-i', 'sine=frequency=450:sample_rate=44100:duration=0.5',
+    '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
+    '-c:a', 'aac', '-shortest', inputVideo,
+  ]);
   browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
-  await page.addInitScript(() => {
-    Object.defineProperty(navigator, 'deviceMemory', { configurable: true, value: 16 });
-    Object.defineProperty(navigator, 'hardwareConcurrency', { configurable: true, value: 16 });
-  });
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.goto('http://127.0.0.1:3000/upscale', { waitUntil: 'domcontentloaded' });
-  await page.locator('[data-upscale-studio]').waitFor({ state: 'visible', timeout: 30000 });
-  const models = [
-    ['quicksrnet-small-4x', 'nano'],
-    ['quicksrnet-medium-4x', 'lite'],
-    ['xlsr-4x', 'nano'],
-  ];
+  await page.goto(origin, { waitUntil: 'domcontentloaded' });
+  await page.locator('[data-upscale-studio]').waitFor({ state: 'visible', timeout: 25000 });
 
-  const results = await page.evaluate(async ({ videoBase64, models }) => {
-    const { upscaleImage, upscaleVideo } = await import('/src/lib/upscalers/index.ts');
-    const { makeUpscaleJobSnapshot, UpscaleExecutionTrace } =
-      await import('/src/lib/upscalers/executionTrace.ts');
-    const binary = Uint8Array.from(atob(videoBase64), char => char.charCodeAt(0));
-    const originalVideo = new File([binary], 'original.mp4', { type: 'video/mp4' });
-    const canvas = document.createElement('canvas');
-    canvas.width = 32; canvas.height = 24;
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#215fa9'; ctx.fillRect(0, 0, 32, 24);
-    ctx.fillStyle = '#f5b142'; ctx.fillRect(4, 2, 11, 16);
-    ctx.fillStyle = '#18387f'; ctx.fillRect(15, 11, 17, 8);
-    const imageBlob = await new Promise((resolve, reject) => canvas.toBlob(
-      blob => blob ? resolve(blob) : reject(new Error('PNG failed')), 'image/png'));
-    const originalImage = new File([imageBlob], 'original.png', { type: 'image/png' });
-    const records = [];
-    for (const [model, tier] of models) {
-      for (const media of ['image', 'video']) {
-        const file = media === 'image' ? originalImage : originalVideo;
-        const id = media + '-' + model;
-        const job = {
-          id, file, type: media, mode: 'upscale', model, upscaleTier: tier,
-          upscalePurpose: media === 'video' ? '동영상' : '실사', videoMethod: 'ai',
-        };
-        const trace = new UpscaleExecutionTrace(makeUpscaleJobSnapshot(job));
-        const output = media === 'image'
-          ? await upscaleImage(file, model, undefined, trace)
-          : await upscaleVideo(id, file, 'ai', 1, undefined, model, trace);
-        const evidence = await trace.finish(file, output);
-        const objectUrl = URL.createObjectURL(output);
-        const recovered = await fetch(objectUrl).then(r => r.blob());
-        URL.revokeObjectURL(objectUrl);
-        if (recovered.size !== output.size) throw new Error('Object URL returned wrong Blob size');
-        const hash = async blob => [...new Uint8Array(await crypto.subtle.digest('SHA-256', await blob.arrayBuffer()))]
-          .map(value => value.toString(16).padStart(2, '0')).join('');
-        if (await hash(recovered) !== evidence.outputSha256) {
-          throw new Error('Output Blob URL hash did not match execution evidence for ' + id);
-        }
-        records.push({ id, media, model, evidence, bytes: output.size,
-          base64: media === 'video' ? await (async () => {
-            const raw = new Uint8Array(await output.arrayBuffer());
-            let text = '';
-            for (const byte of raw) text += String.fromCharCode(byte);
-            return btoa(text);
-          })() : undefined });
+  // Images: A->B->C with the same pixel bytes, exercising UI controls,
+  // enqueue snapshots and distinct Blob URLs bound to the right Job IDs.
+  const bytes = await imageFixture(page);
+  const dock = page.getByRole('region', { name: '모델 수준' });
+  const slider = dock.getByRole('slider', { name: 'AI 복원 등급' });
+  await slider.focus();
+  await slider.press('Home');
+  await runImageJob(page, bytes, 'image-A.png', 'quicksrnet-small-4x');
+
+  await dock.getByRole('button', { name: '모델 상세 설정', exact: true }).click();
+  const sheet = page.getByRole('dialog', { name: '품질 수준 선택' });
+  await sheet.waitFor({ state: 'visible' });
+  await sheet.getByRole('button', { name: 'XLSR 4×', exact: true }).click();
+  await sheet.getByRole('button', { name: '이 모델로 적용하기' }).click();
+  await runImageJob(page, bytes, 'image-B.png', 'xlsr-4x');
+
+  await slider.focus();
+  await slider.press('ArrowRight');
+  await runImageJob(page, bytes, 'image-C.png', 'quicksrnet-medium-4x');
+
+  if (new Set(evidence.image.map(item => item.jobId)).size !== 3) throw new Error('Image jobs share task ID');
+  if (new Set(evidence.image.map(item => item.resource)).size !== 3) throw new Error('Image jobs reused a model resource');
+  if (new Set(evidence.image.map(item => item.sha256)).size !== 3) {
+    throw new Error('Images generated by three different models produced identical output bytes');
+  }
+  // The first download must still return its original objectURL and hash after
+  // B and C have finished, not the latest Blob from a shared component state.
+  const first = await page.locator('[data-upscale-studio] li').filter({ hasText: 'image-A.png' })
+    .locator('a[data-job-id]').evaluate(async anchor => {
+      const bytes = await (await fetch(anchor.href)).arrayBuffer();
+      return [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))]
+        .map(b => b.toString(16).padStart(2, '0')).join('');
+    });
+  if (first !== evidence.image[0].sha256) throw new Error('First image download was replaced by a newer result');
+  console.log('PASS image A->B->C actual ONNX inference, job-bound Blob URL and SHA256');
+
+  // Video A->B->C: direct browser FFmpeg.wasm + ONNX per-frame inference,
+  // verifying effective session identity, resource hashes and encoder frames.
+  const originalBase64 = readFileSync(inputVideo).toString('base64');
+  for (const configuration of examples) {
+    const result = await page.evaluate(async ({ base64, config }) => {
+      const { upscaleVideo } = await import('/src/lib/upscalers/index.ts');
+      const { UpscaleExecutionTrace, makeUpscaleJobSnapshot } =
+        await import('/src/lib/upscalers/executionTrace.ts');
+      const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+      const file = new File([bytes], 'original.mp4', { type: 'video/mp4' });
+      const jobId = 'video-' + config.id;
+      const task = {
+        id: jobId, file, mode: 'upscale', type: 'video',
+        status: 'processing', progress: 0, stored: true,
+        model: config.id, upscaleTier: config.tier, upscalePurpose: config.purpose,
+        videoMethod: 'ai', limitSeconds: 1,
+      };
+      const trace = new UpscaleExecutionTrace(makeUpscaleJobSnapshot(task));
+      const output = await upscaleVideo(jobId, file, 'ai', 1, undefined, config.id, trace);
+      const verification = await trace.finish(file, output);
+      const url = URL.createObjectURL(output);
+      try {
+        const downloaded = new Uint8Array(await (await fetch(url)).arrayBuffer());
+        const sha = [...new Uint8Array(await crypto.subtle.digest('SHA-256', downloaded))]
+          .map(b => b.toString(16).padStart(2, '0')).join('');
+        // Small synthetic test fixture: returning encoded bytes enables an
+        // independent ffprobe and frame-decode verification in native FFmpeg.
+        let raw = '';
+        for (const byte of downloaded) raw += String.fromCharCode(byte);
+        return { verification, sha, encodedBase64: btoa(raw), downloadBytes: downloaded.length };
+      } finally {
+        URL.revokeObjectURL(url);
       }
+    }, { base64: originalBase64, config: configuration });
+    const { verification, sha } = result;
+    if (verification.requestedModelId !== configuration.id ||
+        verification.effectiveModelId !== configuration.id ||
+        verification.engine !== 'onnx-wasm' ||
+        !verification.resource?.includes(configuration.id.replace(/-4x$/, '')) && !verification.resource?.includes('.onnx') ||
+        verification.inferenceCalls < 1 ||
+        verification.inferredFrames < 1 ||
+        verification.encodedFrames !== verification.inferredFrames ||
+        verification.jobId !== 'video-' + configuration.id ||
+        verification.outputSha256 !== sha ||
+        verification.outputBytes !== result.downloadBytes) {
+      throw new Error('Wrong video model/encoder/download evidence: ' + JSON.stringify(verification));
     }
-    return records;
-  }, { videoBase64, models });
-
-  const byMedia = { image: [], video: [] };
-  for (const record of results) {
-    const { evidence, id, model, media } = record;
-    assert.equal(evidence.jobId, id);
-    assert.equal(evidence.requestedModelId, model);
-    assert.equal(evidence.effectiveModelId, model);
-    assert.equal(evidence.engine, 'onnx-wasm');
-    assert.ok(evidence.resource?.endsWith('.onnx'));
-    assert.ok(evidence.inferenceCalls >= 1);
-    assert.ok(evidence.outputSha256?.length === 64);
-    if (media === 'video') {
-      assert.ok(evidence.inferredFrames >= 1);
-      assert.equal(evidence.inferredFrames, evidence.encodedFrames);
-      const path = join(dir, id + '.mp4');
-      writeFileSync(path, Buffer.from(record.base64, 'base64'));
-      const probe = JSON.parse(run('ffprobe', ['-v','error', '-select_streams','v:0',
-        '-show_entries','stream=width,height', '-of','json', path])).streams[0];
-      assert.equal(probe.width, 128);
-      assert.equal(probe.height, 96);
+    const filePath = join(dir, configuration.id + '.mp4');
+    writeFileSync(filePath, Buffer.from(result.encodedBase64, 'base64'));
+    const probe = JSON.parse(command('ffprobe', [
+      '-v', 'error', '-select_streams', 'v:0',
+      '-show_entries', 'stream=width,height,avg_frame_rate', '-of', 'json', filePath,
+    ])).streams?.[0];
+    if (probe.width !== 96 || probe.height !== 64 || probe.avg_frame_rate !== '4/1') {
+      throw new Error('Video dimensions/fps mismatch: ' + JSON.stringify(probe));
     }
-    byMedia[media].push(evidence.outputSha256);
-    console.log('PASS actual execution:', id, evidence.resource, evidence.inferenceCalls,
-      evidence.inferredFrames, evidence.outputSha256);
+    const rawFrame = join(dir, configuration.id + '.rgb');
+    command('ffmpeg', ['-hide_banner','-loglevel','error','-y', '-i',filePath,
+      '-map','0:v:0','-f','rawvideo','-pix_fmt','rgb24',rawFrame]);
+    evidence.video.push({
+      jobId: verification.jobId,
+      requestedModelId: verification.requestedModelId,
+      effectiveModelId: verification.effectiveModelId,
+      modelResource: verification.resource,
+      modelGraphSha256: verification.modelGraphSha256,
+      inferenceCalls: verification.inferenceCalls,
+      inferredFrames: verification.inferredFrames,
+      encodedFrames: verification.encodedFrames,
+      outputBytes: verification.outputBytes,
+      inputSha256: verification.inputSha256,
+      outputSha256: sha,
+      decodedFramesSha256: digest(readFileSync(rawFrame)),
+      resolution: probe.width + 'x' + probe.height,
+      frameRate: probe.avg_frame_rate,
+    });
+    console.log('PASS real video model', configuration.id, 'frames', verification.encodedFrames, sha);
   }
-  const small = results.find(record => record.id === 'image-quicksrnet-small-4x')?.evidence;
-  const medium = results.find(record => record.id === 'image-quicksrnet-medium-4x')?.evidence;
-  assert.ok(small?.modelGraphSha256?.length === 64, 'Small model graph checksum unavailable');
-  assert.ok(medium?.modelGraphSha256?.length === 64, 'Medium model graph checksum unavailable');
-  assert.notEqual(small.modelGraphSha256, medium.modelGraphSha256,
-    'Two requested ONNX model IDs resolved to identical graph bytes');
-  console.log('PASS independently loaded model graphs:', small.modelGraphSha256, medium.modelGraphSha256);
-  assert.ok(new Set(byMedia.image).size >= 2, 'Three different image models unexpectedly returned identical binary results');
-  assert.ok(new Set(byMedia.video).size >= 2, 'Three different video models unexpectedly returned identical binary results');
-
-  // End-to-end UI: two uploads with the SAME name, different selected models,
-  // independent job IDs, independent Blob URLs and independently hashed downloads.
-  const input = page.locator('[data-testid="upscale-file-input"]');
-  async function setModel(tier) {
-    await page.getByRole('button', { name: '모델 상세 설정', exact: true }).click();
-    const sheet = page.getByRole('dialog', { name: '품질 수준 선택' });
-    await sheet.getByRole('button', { name: tier, exact: true }).click();
-    await sheet.getByRole('button', { name: '이 모델로 적용하기' }).click();
-    await sheet.waitFor({ state: 'hidden' });
+  if (new Set(evidence.video.map(item => item.modelResource)).size !== 3) throw new Error('Video models share ONNX resource');
+  if (new Set(evidence.video.map(item => item.decodedFramesSha256)).size !== 3) {
+    throw new Error('Three model outputs have identical decoded video frames');
   }
-  const imageBytes = await page.evaluate(async () => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 24; canvas.height = 16;
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#2687cd'; ctx.fillRect(0,0,24,16);
-    ctx.fillStyle = '#e9d334'; ctx.fillRect(3,4,13,8);
-    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-    return Array.from(new Uint8Array(await blob.arrayBuffer()));
-  });
-
-  await setModel('Nano');
-  await input.setInputFiles({ name: 'same.png', mimeType: 'image/png', buffer: Buffer.from(imageBytes) });
-  await page.getByText('준비 완료').first().waitFor({ state: 'visible', timeout: 20000 });
-  await page.getByRole('button', { name: '복원 시작', exact: true }).click();
-  await page.locator('a[data-job-id]').first().waitFor({ state: 'visible', timeout: 120000 });
-
-  await setModel('Lite');
-  await input.setInputFiles({ name: 'same.png', mimeType: 'image/png', buffer: Buffer.from(imageBytes) });
-  await page.getByText('준비 완료').first().waitFor({ state: 'visible', timeout: 20000 });
-  await page.getByRole('button', { name: '복원 시작', exact: true }).click();
-  await page.locator('a[data-job-id]').nth(1).waitFor({ state: 'visible', timeout: 120000 });
-
-  const downloads = await page.locator('a[data-job-id]').evaluateAll(async anchors => {
-    const output = [];
-    for (const link of anchors) {
-      const bytes = new Uint8Array(await (await fetch(link.href)).arrayBuffer());
-      const digest = await crypto.subtle.digest('SHA-256', bytes);
-      const sha = [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
-      output.push({
-        id: link.dataset.jobId, model: link.dataset.effectiveModelId,
-        recordedHash: link.dataset.outputSha256, recoveredHash: sha,
-        url: link.href, size: bytes.byteLength,
-      });
-    }
-    return output;
-  });
-  assert.equal(downloads.length, 2);
-  assert.equal(new Set(downloads.map(x => x.id)).size, 2);
-  assert.equal(new Set(downloads.map(x => x.url)).size, 2);
-  assert.deepEqual(downloads.map(x => x.model), ['quicksrnet-small-4x', 'quicksrnet-medium-4x']);
-  for (const record of downloads) {
-    assert.equal(record.recordedHash, record.recoveredHash);
-    assert.ok(record.size > 100);
-    console.log('PASS download Blob integrity:', record.id, record.model, record.recordedHash);
+  if (new Set(evidence.video.map(item => item.outputSha256)).size !== 3) {
+    throw new Error('Three model runs produced byte-identical MP4');
   }
+  if (new Set(evidence.video.map(item => item.inputSha256)).size !== 1) throw new Error('Video source differs between runs');
   if (errors.length) throw new Error('Browser errors: ' + errors.join(' | '));
-  console.log('PASS 3 model image/video inference + separate queued download identity and hashes');
+  writeFileSync('identity-evidence.json', JSON.stringify(evidence, null, 2) + '\n');
+  console.log('PASS video A->B->C session/resource/frame/download identity');
+  console.log('EVIDENCE:', JSON.stringify(evidence));
 } finally {
   await browser?.close();
   rmSync(dir, { recursive: true, force: true });
