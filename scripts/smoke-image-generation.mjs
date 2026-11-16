@@ -93,6 +93,7 @@ try {
     }
   });
   await page.getByRole('heading', { name: '이미지 생성' }).waitFor({ state: 'visible' });
+  await page.getByRole('group', { name: '이미지 생성 실행 환경' }).getByRole('button', { name: 'ComfyUI' }).click();
   await page.getByRole('group', { name: '이미지 생성 수준' }).getByRole('button', { name: 'Medium' }).click();
   await page.locator('#gen-model').selectOption('flux2-klein-4b');
   await page.locator('#gen-prompt').fill('A bright lunar observatory');
@@ -149,7 +150,86 @@ try {
     throw new Error('Model mismatch was not blocked');
   }
   if (errors.length) throw new Error('Browser errors: ' + errors.join(' | '));
+
+  // Independent browser-engine wiring smoke. Workers are mocked; real ONNX weights
+  // are NOT loaded by this test. This verifies local job routing and Blob identity.
+  const nativePage = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await nativePage.addInitScript(() => {
+    Object.defineProperty(navigator, 'gpu', {
+      configurable: true,
+      value: {
+        requestAdapter: async () => ({
+          features: new Set(['shader-f16']),
+          limits: { maxBufferSize: 4294967296 },
+        }),
+      },
+    });
+    class MockWebGpuWorker {
+      onmessage = null;
+      onerror = null;
+      constructor(url) {
+        if (!String(url).includes('/workers/flux2-stage.js')) throw new Error('Wrong worker script');
+      }
+      postMessage({ requestId, stage, payload }) {
+        queueMicrotask(() => {
+          let data;
+          if (stage === 'encode') data = new Float32Array(512 * 7680).buffer;
+          else if (stage === 'denoise') data = payload.latent;
+          else if (stage === 'decode') {
+            const size = payload.width * payload.height;
+            const result = new Uint8ClampedArray(size * 4);
+            const source = Math.abs(new Float32Array(payload.latent)[0]);
+            const shade = Math.max(1, Math.floor((source * 1e6) % 254));
+            for (let i = 0; i < size; i++) {
+              result[i * 4] = shade;
+              result[i * 4 + 1] = 150;
+              result[i * 4 + 2] = 200;
+              result[i * 4 + 3] = 255;
+            }
+            data = result.buffer;
+          }
+          if (this.onmessage) this.onmessage({
+            data: { requestId, type: 'result', data, shape: stage === 'encode' ? [1,512,7680] : undefined },
+          });
+        });
+      }
+      terminate() {}
+    }
+    globalThis.Worker = MockWebGpuWorker;
+  });
+  const localCalls = [];
+  nativePage.on('request', request => {
+    if (request.url().startsWith('http://127.0.0.1:8188')) localCalls.push(request.url());
+  });
+  await nativePage.goto('http://127.0.0.1:3000/generate', { waitUntil: 'domcontentloaded' });
+  await nativePage.getByRole('heading', { name: '이미지 생성' }).waitFor({ state: 'visible' });
+  await nativePage.getByRole('group', { name: '이미지 생성 수준' }).getByRole('button', { name: 'Medium' }).click();
+  await nativePage.locator('#gen-model').selectOption('flux2-klein-4b');
+  await nativePage.locator('#gen-prompt').fill('A blue flower in moonlight');
+  await nativePage.getByRole('checkbox', { name: /대용량 모델 다운로드/ }).check();
+  const nativeAdvanced = nativePage.locator('details').filter({ has: nativePage.locator('summary').getByText('생성 설정') });
+  await nativeAdvanced.locator('summary').click();
+  await nativeAdvanced.getByRole('checkbox', { name: 'Random Seed' }).uncheck();
+  await nativeAdvanced.getByRole('spinbutton', { name: 'Seed' }).fill('77');
+  await nativeAdvanced.getByRole('spinbutton', { name: 'Batch Count' }).fill('2');
+  await nativePage.getByRole('button', { name: '이미지 생성', exact: true }).click();
+  await nativePage.getByText('생성 완료').waitFor({ state: 'visible', timeout: 20000 });
+  if (await nativePage.locator('.gen-result').count() !== 2) throw new Error('WebGPU mode did not emit two independent image results');
+  if (localCalls.length) throw new Error('Browser mode attempted to contact ComfyUI: ' + localCalls.join(', '));
+  const nativeHashes = await nativePage.locator('.gen-result a[download]').evaluateAll(async anchors => {
+    const hashes = [];
+    for (const a of anchors) {
+      const bytes = await (await fetch(a.href)).arrayBuffer();
+      const digest = await crypto.subtle.digest('SHA-256', bytes);
+      hashes.push([...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join(''));
+    }
+    return hashes;
+  });
+  if (new Set(nativeHashes).size !== 2) throw new Error('Browser mode reused the previous generated Blob bytes');
+  await nativePage.close();
+
   console.log('PASS 320/390/1440 responsive layout, Instant/Medium/High, local API workflow, seed/steps/cfg/dimensions, 2 independent job Blobs, mismatch blocking');
+  console.log('PASS browser WebGPU UI wiring, explicit download consent, mocked-worker generation and job-specific Blob output (no weights tested)');
 } finally {
   await browser?.close();
 }
