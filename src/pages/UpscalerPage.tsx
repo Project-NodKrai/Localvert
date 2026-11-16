@@ -8,6 +8,7 @@ import type { StudioMedia, StudioViewMode, StudioProfile } from '../lib/upscaler
 import { Task, UpscaleTask, FileType } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { upscaleImage, upscaleVideo } from '../lib/upscalers';
+import { UpscaleExecutionTrace, makeUpscaleJobSnapshot } from '../lib/upscalers/executionTrace';
 import { adviseImageUpscale, detectDeviceHints } from '../lib/upscalers/performance';
 import { activeModel, isRunnableSelection } from '../lib/upscalers/catalog';
 import { storeFile, removeStoredFile, getStoredFile } from '../lib/storage';
@@ -159,13 +160,15 @@ export default function UpscalerPage() {
         task.upscalePurpose ?? (task.type === 'video' ? '동영상' : '실사'))) {
       throw new Error('선택한 등급과 용도에 실행 가능한 모델이 없어. 복원 설정에서 모델을 다시 선택해 줘.');
     }
+    const trace = new UpscaleExecutionTrace(makeUpscaleJobSnapshot(task));
     let blob: Blob;
-    if (task.type === 'image') blob = await upscaleImage(fileObj, task.model, onProgress);
-    else if (task.type === 'video') blob = await upscaleVideo(task.id, fileObj, task.videoMethod, task.limitSeconds, onProgress, task.model);
+    if (task.type === 'image') blob = await upscaleImage(fileObj, task.model, onProgress, trace);
+    else if (task.type === 'video') blob = await upscaleVideo(task.id, fileObj, task.videoMethod, task.limitSeconds, onProgress, task.model, trace);
     else throw new Error('이미지 또는 동영상만 복원할 수 있습니다.');
+    const evidence = await trace.finish(fileObj, blob);
     const stem = task.file.name.replace(/\.[^.]+$/, '');
     const ext = task.type === 'image' ? 'png' : 'mp4';
-    return { blob, resultName: `upscaled_${stem}.${ext}` };
+    return { blob, evidence, resultName: `upscaled_${stem}.${ext}` };
   };
 
   const { enqueue, cancelTask } =

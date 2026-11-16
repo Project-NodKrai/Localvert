@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { Task } from '../types';
+import type { UpscaleExecutionEvidence } from './upscalers/executionTrace';
 import { removeStoredFile } from './storage';
 
 interface ProcessResult {
   blob: Blob;
   resultName: string;
+  evidence?: UpscaleExecutionEvidence;
 }
 
 type TaskProcessor<T extends Task> = (task: T, onProgress: (progress: number) => void) => Promise<ProcessResult>;
@@ -66,6 +68,7 @@ export function useTaskQueue<T extends Task>(
 
   const pendingRef = useRef<string[]>([]);
   const runningRef = useRef<Set<string>>(new Set());
+  const immutableJobsRef = useRef<Map<string, T>>(new Map());
   const cancelledRef = useRef<Set<string>>(new Set());
   const mountedRef = useRef(true);
   const pumpRef = useRef<() => void>(() => {});
@@ -86,9 +89,13 @@ export function useTaskQueue<T extends Task>(
 
     while (runningRef.current.size < concurrency && pendingRef.current.length) {
       const id = pendingRef.current.shift()!;
-      const task = tasksRef.current.find((t) => t.id === id);
-
-      if (!task || !task.stored || cancelledRef.current.has(id)) continue;
+      // Processing always receives the settings captured by enqueueMany,
+      // even if a React state update races with the queue's asynchronous pump.
+      const task = immutableJobsRef.current.get(id);
+      if (!task || !task.stored || cancelledRef.current.has(id)) {
+        immutableJobsRef.current.delete(id);
+        continue;
+      }
 
       runningRef.current.add(id);
       updateTask(id, { status: 'processing', progress: 0, errorMsg: undefined } as Partial<T>);
@@ -104,6 +111,9 @@ export function useTaskQueue<T extends Task>(
           const result = await processorRef.current(task, progress);
           if (!mountedRef.current || cancelledRef.current.has(id)) return;
 
+          if (result.evidence && result.evidence.jobId !== id) {
+            throw new Error('완료된 처리 결과의 작업 ID가 현재 작업과 달라.');
+          }
           const url = URL.createObjectURL(result.blob);
           if (!mountedRef.current || cancelledRef.current.has(id)) {
             URL.revokeObjectURL(url);
@@ -115,6 +125,8 @@ export function useTaskQueue<T extends Task>(
             progress: 100,
             stored: false,
             resultUrl: url,
+            resultBlob: result.blob,
+            resultEvidence: result.evidence,
             resultName: result.resultName,
             resultSize: result.blob.size,
           } as Partial<T>);
@@ -131,6 +143,7 @@ export function useTaskQueue<T extends Task>(
           }
         } finally {
           runningRef.current.delete(id);
+          immutableJobsRef.current.delete(id);
           pumpRef.current();
         }
       })();
@@ -151,6 +164,8 @@ export function useTaskQueue<T extends Task>(
           !cancelledRef.current.has(id)) {
         accepted.push(id);
         pendingIds.add(id);
+        // Freeze job-level selections at registration, not at GPU initialization.
+        immutableJobsRef.current.set(id, Object.freeze({ ...task }) as T);
       }
     }
     if (!accepted.length) return;
@@ -175,6 +190,7 @@ export function useTaskQueue<T extends Task>(
   const cancelTask = useCallback((id: string) => {
     cancelledRef.current.add(id);
     pendingRef.current = pendingRef.current.filter((pendingId) => pendingId !== id);
+    immutableJobsRef.current.delete(id);
   }, []);
 
   useEffect(() => {
@@ -182,6 +198,7 @@ export function useTaskQueue<T extends Task>(
     return () => {
       mountedRef.current = false;
       pendingRef.current = [];
+      immutableJobsRef.current.clear();
       for (const id of runningRef.current) cancelledRef.current.add(id);
     };
   }, []);
