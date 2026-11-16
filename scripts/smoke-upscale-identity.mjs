@@ -112,6 +112,13 @@ try {
     console.log('PASS actual execution:', id, evidence.resource, evidence.inferenceCalls,
       evidence.inferredFrames, evidence.outputSha256);
   }
+  const small = results.find(record => record.id === 'image-quicksrnet-small-4x')?.evidence;
+  const medium = results.find(record => record.id === 'image-quicksrnet-medium-4x')?.evidence;
+  assert.ok(small?.modelGraphSha256?.length === 64, 'Small model graph checksum unavailable');
+  assert.ok(medium?.modelGraphSha256?.length === 64, 'Medium model graph checksum unavailable');
+  assert.notEqual(small.modelGraphSha256, medium.modelGraphSha256,
+    'Two requested ONNX model IDs resolved to identical graph bytes');
+  console.log('PASS independently loaded model graphs:', small.modelGraphSha256, medium.modelGraphSha256);
   assert.ok(new Set(byMedia.image).size >= 2, 'Three different image models unexpectedly returned identical binary results');
   assert.ok(new Set(byMedia.video).size >= 2, 'Three different video models unexpectedly returned identical binary results');
 
