@@ -5,6 +5,7 @@ import {
 import type { UpscaleModelSelection, UpscaleTier, UpscaleUse } from './catalog';
 
 export type StudioMedia = 'image' | 'video';
+export type StudioViewMode = StudioMedia | 'mixed';
 export type StudioProfile = {
   model: UpscaleModelSelection;
   upscaleTier: UpscaleTier;
@@ -49,4 +50,15 @@ export function updateStudioProfile(
 export function isStudioProfileRunnable(profile: StudioProfile, media: StudioMedia): boolean {
   if (media === 'video' && profile.videoMethod === 'filter') return true;
   return isRunnableSelection(profile.model, profile.upscaleTier, profile.upscalePurpose);
+}
+
+
+/** Filter a drop by its visible workspace. Mixed accepts both media types. */
+export function canAcceptStudioFile(media: StudioViewMode, file: Pick<File, 'type' | 'name'>): boolean {
+  const mime = file.type.toLowerCase();
+  const name = file.name.toLowerCase();
+  const image = mime.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|tiff?|avif|heic|heif|ico)$/i.test(name);
+  const video = mime.startsWith('video/') || /\.(mp4|m4v|mov|webm|mkv|avi|ogv|wmv|flv|3gp)$/i.test(name);
+  if (media === 'mixed') return image || video;
+  return media === 'image' ? image : video;
 }
