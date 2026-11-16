@@ -1,25 +1,24 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, FileType2, FolderArchive, Image as ImageIcon, ShieldCheck } from 'lucide-react';
 import Header from '../components/Header';
 
 const features = [
   {
     to: '/',
-    icon: FileType2,
+    icon: 'convert',
     title: '파일 변환',
     description: '이미지, 동영상, 오디오, 문서 등 파일 종류에 맞는 출력 형식을 선택해 변환해.',
     action: '변환 화면 열기',
   },
   {
     to: '/compress',
-    icon: FolderArchive,
+    icon: 'compress',
     title: '용량 압축',
     description: '이미지와 동영상의 압축 강도, 형식, 해상도와 오디오 옵션을 조정해.',
     action: '압축 화면 열기',
   },
   {
     to: '/upscale',
-    icon: ImageIcon,
+    icon: 'upscale',
     title: '고화질 복원',
     description: '실사, 일러스트, 애니메이션 및 동영상에 맞는 AI 모델과 복원 등급을 선택해.',
     action: '복원 화면 열기',
@@ -40,14 +39,13 @@ export default function DetailsPage() {
           <h2 id="lv-features-title" className="lv-section-title">파일 작업</h2>
           <div className="lv-feature-grid">
             {features.map(feature => {
-              const Icon = feature.icon;
               return (
                 <article key={feature.to} className="lv-feature-card">
-                  <div className="lv-feature-icon"><Icon size={24} strokeWidth={1.8} aria-hidden="true" /></div>
+                  <div className="lv-feature-icon"><FeatureGlyph type={feature.icon} /></div>
                   <h3>{feature.title}</h3>
                   <p>{feature.description}</p>
                   <Link className="lv-feature-link" to={feature.to}>
-                    {feature.action} <ArrowRight size={17} aria-hidden="true" />
+                    {feature.action} <span aria-hidden="true">→</span>
                   </Link>
                 </article>
               );
@@ -55,7 +53,7 @@ export default function DetailsPage() {
           </div>
         </section>
         <section id="privacy" aria-labelledby="lv-privacy-title" className="lv-privacy-panel">
-          <div className="lv-feature-icon"><ShieldCheck size={24} aria-hidden="true" /></div>
+          <div className="lv-feature-icon"><FeatureGlyph type="privacy" /></div>
           <div>
             <h2 id="lv-privacy-title">브라우저에서 파일 처리</h2>
             <p>
@@ -68,5 +66,36 @@ export default function DetailsPage() {
       </main>
       <footer className="lv-footer">© 2026 Localvert · 브라우저 기반 파일 도구</footer>
     </div>
+  );
+}
+
+
+type Glyph = 'convert' | 'compress' | 'upscale' | 'privacy';
+
+/** Product-specific 24px geometry; no new icon library or theme preset. */
+function FeatureGlyph({ type }: { type: Glyph }) {
+  const props = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.85,
+    strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+  return (
+    <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" {...props}>
+      {type === 'convert' && <>
+        <path d="M5 3.5h9l4 4v5M14 3.5v4h4M5 3.5V20h8" />
+        <path d="M12 14h9m-3-3 3 3-3 3" />
+      </>}
+      {type === 'compress' && <>
+        <rect x="4" y="3.5" width="16" height="17" rx="3" />
+        <path d="M9 7.5h6M7.5 12h9M10 16.5h4" />
+        <path d="m8 10 2 2-2 2m8-4-2 2 2 2" />
+      </>}
+      {type === 'upscale' && <>
+        <rect x="3" y="6" width="15" height="14" rx="2" />
+        <circle cx="8" cy="10" r="1.5" />
+        <path d="m4.5 18 4.5-4 3 2 3-3 2 2.5M20 2v7m-3.5-3.5h7" />
+      </>}
+      {type === 'privacy' && <>
+        <path d="M12 2.5 20 6v6.5c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3.5Z" />
+        <path d="m8.5 12.5 2.4 2.3 4.7-5" />
+      </>}
+    </svg>
   );
 }
