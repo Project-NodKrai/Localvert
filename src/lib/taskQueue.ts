@@ -15,7 +15,8 @@ type TaskProcessor<T extends Task> = (task: T, onProgress: (progress: number) =>
 export function snapshotQueueTask<T extends Task>(task: T): Readonly<T> {
   // Freeze the top-level execution fields. Each task gets a separate identity,
   // while source File objects remain immutable browser objects.
-  return Object.freeze({ ...task });
+  const copy = { ...task } as T;
+  return Object.freeze(copy);
 }
 
 export function assertJobResultAssociation(id: string, evidence?: UpscaleExecutionEvidence): void {
