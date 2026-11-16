@@ -32,7 +32,11 @@ type OrtRuntime = {
 };
 
 let runtimePromise: Promise<OrtRuntime> | undefined;
-const sessions = new Map<OnnxModelId, Promise<OrtSession>>();
+interface CachedSession {
+  promise: Promise<OrtSession>;
+  consumers: number;
+}
+const sessions = new Map<OnnxModelId, CachedSession>();
 const sessionIdentity = new WeakMap<OrtSession, {
   modelId: OnnxModelId;
   resource: string;
@@ -73,13 +77,27 @@ async function fetchModel(id: OnnxModelId): Promise<ArrayBuffer> {
   return entry.async('arraybuffer');
 }
 
-async function sessionFor(id: OnnxModelId): Promise<OrtSession> {
-  let pending = sessions.get(id);
-  if (!pending) {
-    pending = (async () => {
+/** Eviction is allowed only after the last active inference releases its lease. */
+function evictIdleSessions() {
+  for (const [modelId, entry] of sessions) {
+    if (sessions.size <= 2) break;
+    if (entry.consumers > 0) continue;
+    sessions.delete(modelId);
+    void entry.promise.then(async session => {
+      try { await session.release?.(); } catch (error) {
+        console.warn('[LocalVert ONNX] session cleanup failed', modelId, error);
+      }
+    }).catch(() => {});
+  }
+}
+
+async function acquireSession(id: OnnxModelId): Promise<{ session: OrtSession; release: () => void }> {
+  let entry = sessions.get(id);
+  if (!entry) {
+    const candidate: CachedSession = { promise: null as unknown as Promise<OrtSession>, consumers: 0 };
+    candidate.promise = (async () => {
       const [ort, weights] = await Promise.all([getRuntime(), fetchModel(id)]);
-      const modelProfile = ONNX_MODEL_PROFILES[id];
-      const externalData = modelProfile.externalData;
+      const profile = ONNX_MODEL_PROFILES[id];
       const graphHash = weights.byteLength <= 32 * 1024 * 1024 && crypto?.subtle
         ? Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', weights)),
             byte => byte.toString(16).padStart(2, '0')).join('')
@@ -88,27 +106,43 @@ async function sessionFor(id: OnnxModelId): Promise<OrtSession> {
         executionProviders: ['wasm'],
         graphOptimizationLevel: 'all',
         intraOpNumThreads: 1,
-        ...(externalData ? {
-          externalData: [{ path: externalData, data: '/models/' + externalData }],
+        ...(profile.externalData ? {
+          externalData: [{ path: profile.externalData, data: '/models/' + profile.externalData }],
         } : {}),
       });
-      sessionIdentity.set(session, { modelId: id, resource: modelProfile.source, graphHash });
+      sessionIdentity.set(session, { modelId: id, resource: profile.source, graphHash });
       return session;
     })().catch(error => {
-      sessions.delete(id);
+      // A late rejection must not delete a newer entry for the same model.
+      if (sessions.get(id) === candidate) sessions.delete(id);
       throw new Error(ONNX_MODEL_PROFILES[id].name + ' 모델 실행 준비 실패: ' + String(error));
     });
-    sessions.set(id, pending);
-    // Do not retain many loaded 4x models in memory on mobile.
-    while (sessions.size > 2) {
-      const oldestId = sessions.keys().next().value as OnnxModelId;
-      if (oldestId === id) break;
-      const old = sessions.get(oldestId);
-      sessions.delete(oldestId);
-      void old?.then(async session => { try { await session.release?.(); } catch {} }).catch(() => {});
-    }
+    entry = candidate;
+    sessions.set(id, candidate);
+  } else {
+    // The newest actual session use is the most recent LRU entry.
+    sessions.delete(id);
+    sessions.set(id, entry);
   }
-  return pending;
+  entry.consumers++;
+  evictIdleSessions();
+  try {
+    const session = await entry.promise;
+    let released = false;
+    return {
+      session,
+      release: () => {
+        if (released) return;
+        released = true;
+        entry.consumers--;
+        evictIdleSessions();
+      },
+    };
+  } catch (error) {
+    entry.consumers--;
+    evictIdleSessions();
+    throw error;
+  }
 }
 
 export function rgbaToNchw(
@@ -210,7 +244,9 @@ export async function upscaleOnnxImage(
   const outputCtx = outputCanvas.getContext('2d');
   if (!outputCtx) throw new Error('출력 캔버스를 생성할 수 없어.');
 
-  const session = await sessionFor(modelId);
+  const lease = await acquireSession(modelId);
+  try {
+  const session = lease.session;
   const identity = sessionIdentity.get(session);
   if (!identity || identity.modelId !== modelId || identity.resource !== profile.source) {
     throw new Error('실행 세션과 요청 모델 리소스의 연결을 검증할 수 없어.');
@@ -239,10 +275,13 @@ export async function upscaleOnnxImage(
     // Yield to input events and the progress UI between patches.
     if (i % 4 === 3) await new Promise(resolve => setTimeout(resolve, 0));
   }
-  return new Promise<Blob>((resolve, reject) => {
+  return await new Promise<Blob>((resolve, reject) => {
     outputCanvas.toBlob(blob => {
       if (blob?.type === 'image/png') resolve(blob);
       else reject(new Error('PNG 출력 인코딩에 실패했어.'));
     }, 'image/png');
   });
+  } finally {
+    lease.release();
+  }
 }
