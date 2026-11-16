@@ -161,17 +161,6 @@
   font-size: 12px;
 }
 .gen-state-ready { background: #e5f5ec; color: #136842; }
-.gen-state-error { background: #fff0f1; color: #a92a41; }
-.gen-state-checking { background: #eaf1ff; color: #215fcf; }
-.gen-connection-controls { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; }
-.gen-connection-controls label { font-size: 13px; color: #405676; font-weight: 710; }
-.gen-connection-controls input { width: 100%; }
-.gen-connection-controls button { white-space: nowrap; }
-.gen-workflow-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
-.gen-workflow-ok {
-  padding: 11px 13px; background: #eaf7ef; border-radius: 10px;
-  color: #176b47; font-size: 12px; line-height: 1.55; overflow-wrap: anywhere;
-}
 .gen-empty { padding: 23px; text-align: center; background: #f7f9fd; border-radius: 13px; color: #60738c; font-size: 13px; }
 .gen-gallery { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 13px; padding: 0; margin: 0; list-style: none; }
 .gen-result { border: 1px solid #dce5f2; border-radius: 15px; overflow: hidden; background: #fff; min-width: 0; }
@@ -189,7 +178,6 @@
 @media (max-width: 480px) {
   .gen-card { padding: 16px; gap: 14px; }
   .gen-options-grid { grid-template-columns: 1fr; }
-  .gen-connection-controls { grid-template-columns: 1fr; }
   .gen-gallery { grid-template-columns: 1fr; }
   .gen-result img { height: 220px; }
   .gen-ratio-options { gap: 5px; }
