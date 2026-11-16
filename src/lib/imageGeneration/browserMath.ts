@@ -7,7 +7,7 @@ export function fluxSigmas(steps: number, imageSequence: number): number[] {
   const result: number[] = [];
   for (let i = 0; i <= steps; i++) {
     const t = (steps - i) / steps;
-    result.push(t === 0 ? 0 : multiplier * t / (multiplier * t + 1 - t));
+    result.push(t === 0 ? 0 : t === 1 ? 1 : multiplier * t / (multiplier * t + 1 - t));
   }
   return result;
 }
