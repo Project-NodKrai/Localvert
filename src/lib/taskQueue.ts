@@ -193,6 +193,15 @@ export function useTaskQueue<T extends Task>(
     pumpRef.current();
   }, [setTasks]);
 
+  const updateUnqueuedTasks = useCallback((updater: (current: T[]) => T[]) => {
+    // Updating the ref synchronously prevents a model-change + Start click
+    // from reading the previous render's draft in the same browser tick.
+    tasksRef.current = updater(tasksRef.current);
+    setTasks(prev => updater(prev));
+  }, [setTasks]);
+
+  const getCurrentTasks = useCallback((): readonly T[] => tasksRef.current, []);
+
   const enqueue = useCallback((id: string) => enqueueMany([id]), [enqueueMany]);
   const enqueueAll = useCallback(() => {
     enqueueMany(tasksRef.current.filter((t) => t.status === 'idle' && t.stored).map((t) => t.id));
@@ -214,5 +223,5 @@ export function useTaskQueue<T extends Task>(
     };
   }, []);
 
-  return { enqueue, enqueueAll, cancelTask };
+  return { enqueue, enqueueAll, cancelTask, updateUnqueuedTasks, getCurrentTasks };
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertTriangle, X } from 'lucide-react';
 import Header from '../components/Header';
@@ -29,6 +29,8 @@ export default function UpscalerPage() {
   const [studioMedia, setStudioMedia] = useState<StudioViewMode>('image');
   const [studioProfiles, setStudioProfiles] =
     useState<Record<StudioMedia, StudioProfile>>(DEFAULT_STUDIO_PROFILES);
+  const profilesRef = useRef(studioProfiles);
+  profilesRef.current = studioProfiles;
   const deviceHints = useMemo(() => detectDeviceHints(), []);
   const [snackbar, setSnackbar] = useState<UpscaleSnackbar | null>(null);
 
@@ -47,7 +49,7 @@ export default function UpscalerPage() {
     const newTasks: Task[] = fileArray.map((file) => {
       const id = uuidv4();
       const type = getFileType(file);
-      const profile = type === 'video' ? studioProfiles.video : studioProfiles.image;
+      const profile = type === 'video' ? profilesRef.current.video : profilesRef.current.image;
       return {
         id,
         file,
@@ -99,11 +101,11 @@ export default function UpscalerPage() {
         );
       }
     }
-  }, [studioProfiles]);
+  }, []);
 
   const handleStudioProfileChange = (media: StudioViewMode, updates: Partial<StudioProfile>) => {
     const targets: StudioMedia[] = media === 'mixed' ? ['image', 'video'] : [media];
-    const nextProfiles = { ...studioProfiles };
+    const nextProfiles = { ...profilesRef.current };
     for (const target of targets) {
       // Selecting a video AI tier/model must NEVER keep running the
       // model-independent FFmpeg filter. Only an explicit filter choice can do so.
@@ -114,12 +116,13 @@ export default function UpscalerPage() {
         ? { ...chosen, videoMethod: 'ai' }
         : chosen);
     }
+    profilesRef.current = nextProfiles;
     setStudioProfiles(nextProfiles);
 
     // Changes apply only to idle uploads; queue and completed jobs are immutable.
-    const affected = tasks.filter(task =>
+    const affected = getCurrentTasks().filter(task =>
       task.mode === 'upscale' && targets.includes(task.type as StudioMedia) && task.status === 'idle') as UpscaleTask[];
-    setTasks(prev => prev.map(task => {
+    updateUnqueuedTasks(prev => prev.map(task => {
       if (task.mode !== 'upscale' || task.status !== 'idle' || !targets.includes(task.type as StudioMedia)) return task;
       const profile = nextProfiles[task.type as StudioMedia];
       return {
@@ -171,13 +174,13 @@ export default function UpscalerPage() {
     return { blob, evidence, resultName: `upscaled_${stem}.${ext}` };
   };
 
-  const { enqueue, cancelTask } =
+  const { enqueue, cancelTask, updateUnqueuedTasks, getCurrentTasks } =
     useTaskQueue(tasks, setTasks, processTask);
 
   // Warnings are advisory. Even an underpowered device may process the image if
   // the user explicitly chooses to continue. The shared queue remains in charge.
   const requestProcessing = (ids: string[]) => {
-    const chosen = tasks.filter(task => ids.includes(task.id) && task.status === 'idle' && task.stored);
+    const chosen = getCurrentTasks().filter(task => ids.includes(task.id) && task.status === 'idle' && task.stored);
     if (!chosen.length) return;
     const warnings: string[] = [];
     for (const task of chosen) {
@@ -214,7 +217,7 @@ export default function UpscalerPage() {
     const ids = snackbar.ids;
     setSnackbar(null);
     ids.forEach(id => {
-      if (tasks.some(task => task.id === id && task.status === 'idle' && task.stored)) enqueue(id);
+      if (getCurrentTasks().some(task => task.id === id && task.status === 'idle' && task.stored)) enqueue(id);
     });
   };
 
