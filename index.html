@@ -3,6 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script data-localvert-route-restore>
+      (() => {
+        // GitHub Pages sends direct SPA routes to 404.html, which redirects
+        // to the real index before the React router is mounted.
+        const url = new URL(window.location.href);
+        if (url.pathname !== '/') return;
+        const originalPath = url.searchParams.get('__localvert_path');
+        if (!originalPath || !originalPath.startsWith('/') || originalPath.startsWith('//')) return;
+        const destination = new URL(originalPath, url.origin);
+        if (destination.origin !== url.origin) return;
+        const path = destination.pathname !== '/'
+          ? destination.pathname.replace(/\/+$/, '')
+          : '/';
+        window.history.replaceState(window.history.state, '', path + destination.search + destination.hash);
+      })();
+    </script>
     <title>로컬 파일 변환기 - 100% 클라이언트 환경</title>
   </head>
   <body>
