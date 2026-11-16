@@ -10,6 +10,7 @@ on:
       - 'src/components/FileList.tsx'
       - 'src/pages/UpscalerPage.tsx'
       - 'src/lib/upscalers/studio.ts'
+      - 'src/components/upscale/StudioLevelDock.tsx'
       - 'src/index.css'
       - 'scripts/smoke-upscale-ui.mjs'
       - '.github/workflows/upscale-ui-smoke.yml'
@@ -30,6 +31,8 @@ jobs:
         with:
           node-version: 20
           cache: npm
+      - name: Install FFmpeg for mixed media browser fixture
+        run: apt-get update && apt-get install -y ffmpeg
       - run: npm ci
       - run: npm install --no-save --package-lock=false playwright@1.57.0
       - name: Validate concept-2 desktop and mobile design, model sheet and snackbar
