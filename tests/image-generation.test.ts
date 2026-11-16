@@ -132,3 +132,27 @@ test('execute API workflow against mocked ComfyUI and bind output to prompt ID',
     globalThis.fetch = previousFetch;
   }
 });
+
+
+test('reject hidden or incomplete seed / steps / resolution mappings', () => {
+  const graph = parseComfyWorkflow(demo);
+  const model = generationModel('flux2-klein-4b');
+  const config = { ...defaultGenerationConfig(model), prompt: 'valid prompt' };
+  const binding = detectBindings(graph);
+  for (const missing of ['seed', 'steps', 'width', 'height'] as const) {
+    const absent = { ...binding, [missing]: undefined };
+    assert.throws(() => prepareComfyPrompt(graph, absent, model, config, 42),
+      new RegExp(missing + ' 입력 필드'));
+  }
+});
+
+test('supported CFG changes are applied to the generation workflow', () => {
+  const input = structuredClone(demo);
+  input['1'].inputs.ckpt_name = 'anima-turbo-2b.safetensors';
+  const graph = parseComfyWorkflow(input);
+  const model = generationModel('anima-turbo-2b');
+  const config = { ...defaultGenerationConfig(model), prompt: 'sky', cfg: 2.5 };
+  const patched = prepareComfyPrompt(graph, detectBindings(graph), model, config, 77);
+  assert.equal(patched['3'].inputs.cfg, 2.5);
+  assert.equal(patched['3'].inputs.steps, 8);
+});

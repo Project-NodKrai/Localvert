@@ -151,6 +151,11 @@ export function prepareComfyPrompt(
   if (!fieldExists(workflow, bindings.prompt)) {
     throw new Error('프롬프트를 입력할 노드와 필드를 연결해야 해.');
   }
+  for (const key of ['seed', 'steps', 'width', 'height'] as const) {
+    if (!fieldExists(workflow, bindings[key])) {
+      throw new Error(key + ' 입력 필드를 워크플로에서 연결해야 해.');
+    }
+  }
   const snapshot = structuredClone(workflow);
   const write = (key: keyof WorkflowBindings, value: string | number, required = false) => {
     const ref = bindings[key];
@@ -168,7 +173,7 @@ export function prepareComfyPrompt(
   }
   // Distilled models still require the workflow to use their supported
   // guidance value; hiding the slider alone is not sufficient.
-  if (fieldExists(workflow, bindings.cfg)) write('cfg', model.cfg ?? 1);
+  if (fieldExists(workflow, bindings.cfg)) write('cfg', model.cfg === null ? 1 : config.cfg);
   if (bindings.sampler && config.sampler) write('sampler', config.sampler);
   if (bindings.scheduler && config.scheduler) write('scheduler', config.scheduler);
   write('width', config.width);

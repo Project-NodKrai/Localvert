@@ -106,7 +106,10 @@ export default function ImageGeneratorPage() {
   })() : [];
   const modelMatched = availableResources.length > 0;
   const promptBound = !!workflow && fieldExists(workflow, bindings.prompt);
-  const canGenerate = !!workflow && modelMatched && promptBound && !!config.prompt.trim() && !busy;
+  const requiredFields = (['seed', 'steps', 'width', 'height'] as const)
+    .filter(key => !fieldExists(workflow || {}, bindings[key]));
+
+  const canGenerate = !!workflow && modelMatched && promptBound && !requiredFields.length && !!config.prompt.trim() && !busy;
   const modelsInLevel = GENERATION_MODELS.filter(item => item.level === level);
 
   function registerUrl(blob: Blob): string {
@@ -162,6 +165,9 @@ export default function ImageGeneratorPage() {
       setShowConnection(true);
       setError('');
     } catch (cause) {
+      setWorkflow(null);
+      setBindings({});
+      setWorkflowName('');
       setError(cause instanceof Error ? cause.message : '워크플로를 읽지 못했어.');
     }
   }
@@ -402,6 +408,9 @@ export default function ImageGeneratorPage() {
             선택 모델에 해당하는 체크포인트 파일명을 워크플로에서 찾지 못했어. 해당 모델의 API 워크플로를 가져와.
           </p>}
           {workflow && !promptBound && <p className="gen-help">프롬프트 입력 노드를 연결해야 해.</p>}
+          {workflow && requiredFields.length > 0 && <p className="gen-help">
+            워크플로 입력 연결에서 {requiredFields.join(' · ')} 필드를 지정해야 해.
+          </p>}
           {busy || progress ? <p className="gen-progress" role="status">{progress}</p> : null}
           {error && <div className="gen-error" role="alert">{error}</div>}
         </section>
