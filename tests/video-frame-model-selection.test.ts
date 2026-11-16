@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateVideoModel, parseVideoFrameRate, videoFrameEncodeArgs, videoFrameExtractArgs } from '../src/lib/upscalers/videoFrames';
+import { validateVideoModel, parseVideoFrameRate, parseEncodedFrameCount, videoFrameEncodeArgs, videoFrameExtractArgs } from '../src/lib/upscalers/videoFrames';
 
 test('real video AI uses selected ONNX model instead of silently defaulting to ESRGAN', () => {
   assert.equal(validateVideoModel('quicksrnet-small-4x', 'nano', '동영상'), 'quicksrnet-small-4x');
@@ -43,4 +43,14 @@ test('variable frame rate inputs are sampled at constant FPS before frame infere
   assert.equal(args[args.indexOf('-t') + 1], '5');
   assert.equal(args[args.indexOf('-start_number') + 1], '1');
   assert.ok(!args.includes('-vsync'));
+});
+
+
+test('actual FFmpeg frame count comes from encoder progress, never assumed from input', () => {
+  assert.equal(parseEncodedFrameCount([
+    'Input #0: image2',
+    'frame= 1 fps=0.0 q=28.0 size=0kB',
+    'frame= 3 fps=0.0 q=-1.0 Lsize=8kB',
+  ]), 3);
+  assert.equal(parseEncodedFrameCount(['audio:4kB', 'video:6kB']), null);
 });

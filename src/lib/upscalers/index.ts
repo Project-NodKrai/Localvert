@@ -4,7 +4,7 @@ import * as tf from '@tensorflow/tfjs';
 import { setWasmPaths } from '@tensorflow/tfjs-backend-wasm';
 import { acquireFFmpeg, releaseFFmpeg } from '../converters/media';
 import { matchesMediaSignature } from '../converters/mediaProfiles';
-import { validateVideoModel, parseVideoFrameRate, videoFrameEncodeArgs, videoFrameExtractArgs } from './videoFrames';
+import { validateVideoModel, parseVideoFrameRate, parseEncodedFrameCount, videoFrameEncodeArgs, videoFrameExtractArgs } from './videoFrames';
 import { adviseImageUpscale, detectDeviceHints } from './performance';
 import type { ImageUpscaleModel } from './performance';
 import { normalizeModelId } from './catalog';
@@ -228,9 +228,12 @@ async function upscaleVideoAI(
   const originalPattern = framePrefix + '%05d.png';
   const outputPattern = upscaledPrefix + '%05d.png';
   const logs: string[] = [];
+  const encoderLogs: string[] = [];
+  let encoding = false;
   const logHandler = ({ message }: { message: string }) => {
     logs.push(message);
     if (logs.length > 120) logs.shift();
+    if (encoding) encoderLogs.push(message);
   };
   instance.on('log', logHandler);
   try {
@@ -263,9 +266,17 @@ async function upscaleVideoAI(
     }
 
     const args = videoFrameEncodeArgs(outputPattern, inputName, outputName, fps, frameNames.length);
+    encoding = true;
     const encodeCode = await instance.exec(args);
+    encoding = false;
     if (encodeCode !== 0) throw new Error('AI 복원 프레임을 MP4로 결합하지 못했어 (FFmpeg 코드 ' + encodeCode + ').');
-    trace?.recordEncodedFrames(frameNames.length);
+    // Do not copy expected input-frame count into "encodedFrames". Take the
+    // actual completed count from FFmpeg, and require it to match inference.
+    if (trace) {
+      const actualCount = parseEncodedFrameCount(encoderLogs);
+      if (actualCount === null) throw new Error('인코더의 실제 프레임 수를 확인할 수 없어.');
+      trace.recordEncodedFrames(actualCount);
+    }
     const result = await instance.readFile(outputName);
     if (typeof result === 'string' || !matchesMediaSignature(new Uint8Array(result), 'mp4')) {
       throw new Error('AI 복원 결과물이 정상적인 MP4 파일이 아니야.');
