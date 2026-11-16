@@ -18,9 +18,11 @@ type Props = {
   startTab: 'tier' | 'model';
   onChange: (updates: Partial<StudioProfile>) => void;
   onClose: () => void;
+  mixed?: boolean;
+  onMediaChange?: (media: StudioMedia) => void;
 };
 
-export default function StudioModelSheet({ open, media, profile, startTab, onChange, onClose }: Props) {
+export default function StudioModelSheet({ open, media, profile, startTab, onChange, onClose, mixed = false, onMediaChange }: Props) {
   const [tab, setTab] = useState<'tier' | 'model'>('tier');
   const [purposeOpen, setPurposeOpen] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -89,6 +91,16 @@ export default function StudioModelSheet({ open, media, profile, startTab, onCha
               </button>
             </div>
             <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 pb-7 sm:px-9">
+              {mixed && (
+                <div className="studio-sheet-media-switch" role="group" aria-label="혼합 모델 종류">
+                  <button type="button" aria-pressed={media === 'image'} onClick={() => onMediaChange?.('image')}>
+                    이미지 모델
+                  </button>
+                  <button type="button" aria-pressed={media === 'video'} onClick={() => onMediaChange?.('video')}>
+                    동영상 모델
+                  </button>
+                </div>
+              )}
               <div className="grid grid-cols-2 rounded-2xl bg-[#F0F3FA] p-1" role="group" aria-label="모델 설정 구역">
                 <button type="button" onClick={() => switchTab('tier')}
                   aria-pressed={tab === 'tier'}
