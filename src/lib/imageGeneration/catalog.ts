@@ -16,8 +16,8 @@ export type GenerationModel = Readonly<{
   licensing: string;
 }>;
 
-// These are model identities, NOT pre-installed in the browser. A chosen model
-// requires a validated API-format ComfyUI workflow and its local checkpoint.
+// Model catalogue is separate from browser runtime availability. Unsupported entries
+// remain discoverable but cannot be run until their local WebGPU engines are verified.
 export const GENERATION_MODELS: readonly GenerationModel[] = [
   {
     id: 'sana-sprint-06b', level: 'instant', name: 'SANA-Sprint 0.6B',
