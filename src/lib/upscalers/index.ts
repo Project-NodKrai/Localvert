@@ -64,7 +64,7 @@ export async function getUpscaler(selection: ImageUpscaleModel = 'esrgan-slim-2x
   await initTfjs();
   if (!imageUpscalers[model]) {
     imageUpscalers[model] = (async () => {
-      let instance: Upscaler;
+      let instance: InstanceType<typeof Upscaler>;
       let resource: string;
       if (model === 'esrgan-medium-2x') {
         const { default: medium2x } = await import('@upscalerjs/esrgan-medium/2x');
