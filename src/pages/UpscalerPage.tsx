@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertTriangle, X } from 'lucide-react';
 import Header from '../components/Header';
@@ -8,6 +8,7 @@ import type { StudioMedia, StudioViewMode, StudioProfile } from '../lib/upscaler
 import { Task, UpscaleTask, FileType } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { upscaleImage, upscaleVideo } from '../lib/upscalers';
+import { UpscaleExecutionTrace, makeUpscaleJobSnapshot } from '../lib/upscalers/executionTrace';
 import { adviseImageUpscale, detectDeviceHints } from '../lib/upscalers/performance';
 import { activeModel, isRunnableSelection } from '../lib/upscalers/catalog';
 import { storeFile, removeStoredFile, getStoredFile } from '../lib/storage';
@@ -28,6 +29,8 @@ export default function UpscalerPage() {
   const [studioMedia, setStudioMedia] = useState<StudioViewMode>('image');
   const [studioProfiles, setStudioProfiles] =
     useState<Record<StudioMedia, StudioProfile>>(DEFAULT_STUDIO_PROFILES);
+  const profilesRef = useRef(studioProfiles);
+  profilesRef.current = studioProfiles;
   const deviceHints = useMemo(() => detectDeviceHints(), []);
   const [snackbar, setSnackbar] = useState<UpscaleSnackbar | null>(null);
 
@@ -46,7 +49,7 @@ export default function UpscalerPage() {
     const newTasks: Task[] = fileArray.map((file) => {
       const id = uuidv4();
       const type = getFileType(file);
-      const profile = type === 'video' ? studioProfiles.video : studioProfiles.image;
+      const profile = type === 'video' ? profilesRef.current.video : profilesRef.current.image;
       return {
         id,
         file,
@@ -98,25 +101,28 @@ export default function UpscalerPage() {
         );
       }
     }
-  }, [studioProfiles]);
+  }, []);
 
   const handleStudioProfileChange = (media: StudioViewMode, updates: Partial<StudioProfile>) => {
     const targets: StudioMedia[] = media === 'mixed' ? ['image', 'video'] : [media];
-    const nextProfiles = { ...studioProfiles };
+    const nextProfiles = { ...profilesRef.current };
     for (const target of targets) {
-      // Mixed dock changes the shared tier, but each medium keeps its own
-      // purpose, model backend and video filter/AI setting.
-      nextProfiles[target] = updateStudioProfile(
-        nextProfiles[target],
-        media === 'mixed' ? { upscaleTier: updates.upscaleTier } : updates,
-      );
+      // Selecting a video AI tier/model must NEVER keep running the
+      // model-independent FFmpeg filter. Only an explicit filter choice can do so.
+      const chosen = media === 'mixed' ? { upscaleTier: updates.upscaleTier } : updates;
+      const aiSelectionChanged = chosen.model !== undefined ||
+        chosen.upscaleTier !== undefined || chosen.upscalePurpose !== undefined;
+      nextProfiles[target] = updateStudioProfile(nextProfiles[target], target === 'video' && aiSelectionChanged
+        ? { ...chosen, videoMethod: 'ai' }
+        : chosen);
     }
+    profilesRef.current = nextProfiles;
     setStudioProfiles(nextProfiles);
 
     // Changes apply only to idle uploads; queue and completed jobs are immutable.
-    const affected = tasks.filter(task =>
+    const affected = getCurrentTasks().filter(task =>
       task.mode === 'upscale' && targets.includes(task.type as StudioMedia) && task.status === 'idle') as UpscaleTask[];
-    setTasks(prev => prev.map(task => {
+    updateUnqueuedTasks(prev => prev.map(task => {
       if (task.mode !== 'upscale' || task.status !== 'idle' || !targets.includes(task.type as StudioMedia)) return task;
       const profile = nextProfiles[task.type as StudioMedia];
       return {
@@ -157,22 +163,24 @@ export default function UpscalerPage() {
         task.upscalePurpose ?? (task.type === 'video' ? '동영상' : '실사'))) {
       throw new Error('선택한 등급과 용도에 실행 가능한 모델이 없어. 복원 설정에서 모델을 다시 선택해 줘.');
     }
+    const trace = new UpscaleExecutionTrace(makeUpscaleJobSnapshot(task));
     let blob: Blob;
-    if (task.type === 'image') blob = await upscaleImage(fileObj, task.model, onProgress);
-    else if (task.type === 'video') blob = await upscaleVideo(task.id, fileObj, task.videoMethod, task.limitSeconds, onProgress, task.model);
+    if (task.type === 'image') blob = await upscaleImage(fileObj, task.model, onProgress, trace);
+    else if (task.type === 'video') blob = await upscaleVideo(task.id, fileObj, task.videoMethod, task.limitSeconds, onProgress, task.model, trace);
     else throw new Error('이미지 또는 동영상만 복원할 수 있습니다.');
+    const evidence = await trace.finish(fileObj, blob);
     const stem = task.file.name.replace(/\.[^.]+$/, '');
     const ext = task.type === 'image' ? 'png' : 'mp4';
-    return { blob, resultName: `upscaled_${stem}.${ext}` };
+    return { blob, evidence, resultName: `upscaled_${stem}.${ext}` };
   };
 
-  const { enqueue, cancelTask } =
+  const { enqueue, cancelTask, updateUnqueuedTasks, getCurrentTasks } =
     useTaskQueue(tasks, setTasks, processTask);
 
   // Warnings are advisory. Even an underpowered device may process the image if
   // the user explicitly chooses to continue. The shared queue remains in charge.
   const requestProcessing = (ids: string[]) => {
-    const chosen = tasks.filter(task => ids.includes(task.id) && task.status === 'idle' && task.stored);
+    const chosen = getCurrentTasks().filter(task => ids.includes(task.id) && task.status === 'idle' && task.stored);
     if (!chosen.length) return;
     const warnings: string[] = [];
     for (const task of chosen) {
@@ -209,7 +217,7 @@ export default function UpscalerPage() {
     const ids = snackbar.ids;
     setSnackbar(null);
     ids.forEach(id => {
-      if (tasks.some(task => task.id === id && task.status === 'idle' && task.stored)) enqueue(id);
+      if (getCurrentTasks().some(task => task.id === id && task.status === 'idle' && task.stored)) enqueue(id);
     });
   };
 

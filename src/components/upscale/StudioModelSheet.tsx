@@ -31,7 +31,7 @@ export default function StudioModelSheet({ open, media, profile, startTab, onCha
   const selected = modelsForTierPurpose(profile.upscaleTier, profile.upscalePurpose)
     .find(item => item.available && item.id === model.id);
   const candidates = modelsForTierPurpose(profile.upscaleTier, profile.upscalePurpose);
-  const canApply = isStudioProfileRunnable({ ...profile, videoMethod: 'ai' }, media);
+  const canApply = isStudioProfileRunnable(profile, media);
   const tierPosition = UPSCALE_TIERS.indexOf(profile.upscaleTier);
 
   useEffect(() => {
@@ -99,6 +99,27 @@ export default function StudioModelSheet({ open, media, profile, startTab, onCha
                   <button type="button" aria-pressed={media === 'video'} onClick={() => onMediaChange?.('video')}>
                     동영상 모델
                   </button>
+                </div>
+              )}
+              {media === 'video' && (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-1 rounded-2xl bg-[#F0F3FA] p-1" role="group" aria-label="영상 처리 방식">
+                    <button type="button" aria-pressed={profile.videoMethod === 'ai'}
+                      onClick={() => onChange({ videoMethod: 'ai' })}
+                      className={`rounded-xl px-3 py-3 text-sm font-semibold transition-colors ${profile.videoMethod === 'ai' ? 'bg-[#E1EBFF] text-[#2468F5]' : 'text-[#69758D]'}`}>
+                      AI 모델 복원
+                    </button>
+                    <button type="button" aria-pressed={profile.videoMethod === 'filter'}
+                      onClick={() => onChange({ videoMethod: 'filter' })}
+                      className={`rounded-xl px-3 py-3 text-sm font-semibold transition-colors ${profile.videoMethod === 'filter' ? 'bg-white text-[#30547F] shadow-sm' : 'text-[#69758D]'}`}>
+                      빠른 필터
+                    </button>
+                  </div>
+                  {profile.videoMethod === 'filter' && (
+                    <p role="status" className="rounded-xl border border-[#F2DDA2] bg-[#FFF9E9] px-4 py-3 text-xs text-[#805C1E]">
+                      빠른 필터는 AI 모델을 사용하지 않아. 등급이나 모델을 변경하면 AI 모델 복원으로 전환돼.
+                    </p>
+                  )}
                 </div>
               )}
               <div className="grid grid-cols-2 rounded-2xl bg-[#F0F3FA] p-1" role="group" aria-label="모델 설정 구역">

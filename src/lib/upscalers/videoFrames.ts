@@ -45,6 +45,17 @@ export function videoFrameExtractArgs(
   ];
 }
 
+/** FFmpeg reports the number of frames it actually encoded. */
+export function parseEncodedFrameCount(lines: readonly string[]): number | null {
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const matched = lines[i].match(/\bframe=\s*(\d+)/i);
+    if (!matched) continue;
+    const count = Number(matched[1]);
+    if (Number.isSafeInteger(count) && count > 0) return count;
+  }
+  return null;
+}
+
 export function videoFrameEncodeArgs(
   framePattern: string,
   originalName: string,
