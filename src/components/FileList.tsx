@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { Download, Plus, Play, Settings, X } from 'lucide-react';
 import { Task, AppMode, ConvertTask, CompressTask, UpscaleTask, FORMATS } from '../types';
@@ -31,6 +31,7 @@ export default function FileList({
   onFormatChangeAll, onRemove, onProcess, onProcessAll, onAddMore,
 }: Props) {
   const [settingsTaskId, setSettingsTaskId] = useState<string | null>(null);
+  const addInputRef = useRef<HTMLInputElement>(null);
   const settingsTask = tasks.find(task => task.id === settingsTaskId);
   const allIdle = tasks.some(task => task.status === 'idle' && task.stored);
   const processing = tasks.some(task => task.status === 'processing' || task.status === 'queued');
@@ -47,10 +48,11 @@ export default function FileList({
           <h2 className="lv-filelist-title">작업 목록 <span>{tasks.length}</span></h2>
           <p>각 파일의 옵션과 진행 상태를 확인할 수 있어.</p>
         </div>
-        <label htmlFor={addMoreId} className="lv-button lv-button-subtle lv-add-label">
+        <button type="button" onClick={() => addInputRef.current?.click()}
+          className="lv-button lv-button-subtle lv-add-label">
           <Plus size={17} aria-hidden="true" /> 파일 추가
-        </label>
-        <input id={addMoreId} type="file" multiple className="lv-visually-hidden"
+        </button>
+        <input ref={addInputRef} id={addMoreId} type="file" multiple className="lv-visually-hidden"
           onChange={event => { if (event.target.files?.length) onAddMore(event.target.files); event.target.value = ''; }} />
       </div>
       <ul className="lv-task-list">
