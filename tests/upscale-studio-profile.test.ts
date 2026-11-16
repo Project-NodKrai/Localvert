@@ -7,7 +7,7 @@ import {
 test('upscale studio starts with independent compatible image and video profiles', () => {
   assert.equal(isStudioProfileRunnable(DEFAULT_STUDIO_PROFILES.image, 'image'), true);
   assert.equal(isStudioProfileRunnable(DEFAULT_STUDIO_PROFILES.video, 'video'), true);
-  assert.equal(DEFAULT_STUDIO_PROFILES.image.model, 'swin2sr-lightweight-2x');
+  assert.equal(DEFAULT_STUDIO_PROFILES.image.model, 'esrgan-slim-2x');
   assert.equal(DEFAULT_STUDIO_PROFILES.video.upscalePurpose, '동영상');
 });
 

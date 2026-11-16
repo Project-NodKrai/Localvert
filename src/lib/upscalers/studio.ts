@@ -15,7 +15,7 @@ export type StudioProfile = {
 
 export const DEFAULT_STUDIO_PROFILES: Record<StudioMedia, StudioProfile> = {
   image: {
-    model: 'swin2sr-lightweight-2x',
+    model: 'esrgan-slim-2x',
     upscaleTier: 'standard',
     upscalePurpose: '실사',
     videoMethod: 'ai',
