@@ -3,8 +3,8 @@ import { createPortal } from 'react-dom';
 import { AlertTriangle, X } from 'lucide-react';
 import Header from '../components/Header';
 import UpscaleStudio from '../components/upscale/UpscaleStudio';
-import { DEFAULT_STUDIO_PROFILES, updateStudioProfile, isStudioProfileRunnable } from '../lib/upscalers/studio';
-import type { StudioMedia, StudioProfile } from '../lib/upscalers/studio';
+import { DEFAULT_STUDIO_PROFILES, updateStudioProfile, isStudioProfileRunnable, canAcceptStudioFile } from '../lib/upscalers/studio';
+import type { StudioMedia, StudioViewMode, StudioProfile } from '../lib/upscalers/studio';
 import { Task, UpscaleTask, FileType } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { upscaleImage, upscaleVideo } from '../lib/upscalers';
@@ -14,9 +14,8 @@ import { storeFile, removeStoredFile, getStoredFile } from '../lib/storage';
 import { useTaskQueue } from '../lib/taskQueue';
 
 function getFileType(file: File): FileType {
-  const t = file.type;
-  if (t.startsWith('video/')) return 'video';
-  if (t.startsWith('image/')) return 'image';
+  if (canAcceptStudioFile('video', file)) return 'video';
+  if (canAcceptStudioFile('image', file)) return 'image';
   return 'unknown';
 }
 
@@ -26,7 +25,7 @@ type UpscaleSnackbar =
 
 export default function UpscalerPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [studioMedia, setStudioMedia] = useState<StudioMedia>('image');
+  const [studioMedia, setStudioMedia] = useState<StudioViewMode>('image');
   const [studioProfiles, setStudioProfiles] =
     useState<Record<StudioMedia, StudioProfile>>(DEFAULT_STUDIO_PROFILES);
   const deviceHints = useMemo(() => detectDeviceHints(), []);
@@ -101,31 +100,41 @@ export default function UpscalerPage() {
     }
   }, [studioProfiles]);
 
-  const handleStudioProfileChange = (updates: Partial<StudioProfile>) => {
-    const next = updateStudioProfile(studioProfiles[studioMedia], updates);
-    setStudioProfiles(prev => ({ ...prev, [studioMedia]: next }));
-    // Apply the studio preset to all pending files of this media type;
-    // never mutate a queued/running/completed job.
-    const affected = tasks.filter(task => task.mode === 'upscale' &&
-      task.type === studioMedia && task.status === 'idle') as UpscaleTask[];
-    setTasks(prev => prev.map(task => (
-      task.mode === 'upscale' && task.type === studioMedia && task.status === 'idle'
-        ? { ...task,
-            model: next.model, upscaleTier: next.upscaleTier,
-            upscalePurpose: next.upscalePurpose,
-            videoMethod: next.videoMethod, limitSeconds: next.limitSeconds,
-          }
-        : task
-    )));
-    if (isStudioProfileRunnable(next, studioMedia) &&
-      (studioMedia === 'image' || next.videoMethod === 'ai')) {
-      const warnings = [...new Set(affected.flatMap(task =>
-        adviseImageUpscale(next.model, task.width ?? 0, task.height ?? 0, deviceHints).warnings))];
-      if (warnings.length) setSnackbar({ kind: 'notice', messages: warnings });
-      else setSnackbar(current => current?.kind === 'notice' ? null : current);
-    } else {
-      setSnackbar(current => current?.kind === 'notice' ? null : current);
+  const handleStudioProfileChange = (media: StudioViewMode, updates: Partial<StudioProfile>) => {
+    const targets: StudioMedia[] = media === 'mixed' ? ['image', 'video'] : [media];
+    const nextProfiles = { ...studioProfiles };
+    for (const target of targets) {
+      // Mixed dock changes the shared tier, but each medium keeps its own
+      // purpose, model backend and video filter/AI setting.
+      nextProfiles[target] = updateStudioProfile(
+        nextProfiles[target],
+        media === 'mixed' ? { upscaleTier: updates.upscaleTier } : updates,
+      );
     }
+    setStudioProfiles(nextProfiles);
+
+    // Changes apply only to idle uploads; queue and completed jobs are immutable.
+    const affected = tasks.filter(task =>
+      task.mode === 'upscale' && targets.includes(task.type as StudioMedia) && task.status === 'idle') as UpscaleTask[];
+    setTasks(prev => prev.map(task => {
+      if (task.mode !== 'upscale' || task.status !== 'idle' || !targets.includes(task.type as StudioMedia)) return task;
+      const profile = nextProfiles[task.type as StudioMedia];
+      return {
+        ...task,
+        model: profile.model, upscaleTier: profile.upscaleTier,
+        upscalePurpose: profile.upscalePurpose,
+        videoMethod: profile.videoMethod, limitSeconds: profile.limitSeconds,
+      };
+    }));
+
+    const warnings = [...new Set(affected.flatMap(task => {
+      const target = task.type as StudioMedia;
+      const profile = nextProfiles[target];
+      if (!isStudioProfileRunnable(profile, target) || (target === 'video' && profile.videoMethod === 'filter')) return [];
+      return adviseImageUpscale(profile.model, task.width ?? 0, task.height ?? 0, deviceHints).warnings;
+    }))];
+    if (warnings.length) setSnackbar({ kind: 'notice', messages: warnings });
+    else setSnackbar(current => current?.kind === 'notice' ? null : current);
   };
 
   const handleRemoveTask = (id: string) => {
@@ -205,7 +214,6 @@ export default function UpscalerPage() {
   };
 
   const handleRunTask = (id: string) => requestProcessing([id]);
-  const handleRunAll = () => requestProcessing(tasks.filter(task => task.status === 'idle').map(task => task.id));
 
   return (
     <div className="min-h-screen bg-[#F7F9FD] text-[#1B2741] font-sans selection:bg-[#3C7AF2]/20">
@@ -213,17 +221,17 @@ export default function UpscalerPage() {
       <UpscaleStudio
         tasks={tasks.filter((task): task is UpscaleTask => task.mode === 'upscale')}
         media={studioMedia}
-        profile={studioProfiles[studioMedia]}
+        profiles={studioProfiles}
         onMediaChange={setStudioMedia}
         onProfileChange={handleStudioProfileChange}
         onFilesAdded={handleFilesAdded}
         onProcess={handleRunTask}
-        onProcessAll={handleRunAll}
+        onProcessAll={requestProcessing}
         onRemove={handleRemoveTask}
       />
       {snackbar && typeof document !== 'undefined' && createPortal(
         <div role="alert" aria-live="assertive"
-          className={`fixed left-1/2 z-[100] w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 rounded-2xl border border-[#45536F] bg-[#25324E] p-4 text-white shadow-[0_12px_30px_rgba(12,23,48,.25)] ${snackbar.kind === 'notice' ? 'top-4 sm:top-6' : 'bottom-4 sm:bottom-8'}`}
+          className={`fixed left-1/2 z-[100] w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 rounded-2xl border border-[#45536F] bg-[#25324E] p-4 text-white shadow-[0_12px_30px_rgba(12,23,48,.25)] ${snackbar.kind === 'notice' ? 'top-4 sm:top-6' : 'bottom-[185px] sm:bottom-[195px]'}`}
         >
           <div className="flex items-start gap-3">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-[#F3C96F]" aria-hidden="true" />
