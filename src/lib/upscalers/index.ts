@@ -16,47 +16,47 @@ import { isAnime4KModelId, upscaleAnime4K } from './anime4k';
 setWasmPaths('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm/dist/');
 
 const imageUpscalers: Partial<Record<ImageUpscaleModel, Promise<any>>> = {};
+const tfjsSessionIdentity = new WeakMap<object, { modelId: string; resource: string; backend: string }>();
 let tfInitialized = false;
+let tfInitPromise: Promise<void> | undefined;
 
-async function initTfjs() {
-  if (tfInitialized) return;
+// Prevent two parallel model loads from racing a global tfjs setBackend.
+function initTfjs(): Promise<void> {
+  if (tfInitialized) return Promise.resolve();
+  if (tfInitPromise) return tfInitPromise;
+  tfInitPromise = (async () => {
+    const tryBackend = async (name: string) => {
+      try {
+        await tf.setBackend(name);
+        await tf.ready();
+        const testTensor = tf.tensor1d([1, 2, 3]);
+        testTensor.square().dataSync();
+        testTensor.dispose();
+        console.log('TFJS initialized with ' + name + ' backend successfully.');
+        return true;
+      } catch (error) {
+        console.warn(name + ' backend failed or has shader issues:', error);
+        return false;
+      }
+    };
 
-  const tryBackend = async (name: string) => {
-    try {
-      await tf.setBackend(name);
-      await tf.ready();
-      
-      // Smoke test: Perform a tiny operation to trigger shader compilation
-      // 'Failed to compile fragment shader' often happens during the first actual op.
-      const testTensor = tf.tensor1d([1, 2, 3]);
-      testTensor.square().dataSync();
-      testTensor.dispose();
-      
-      console.log(`TFJS initialized with ${name} backend successfully.`);
-      return true;
-    } catch (e) {
-      console.warn(`${name} backend failed or has shader issues:`, e);
-      return false;
+    if (await tryBackend('webgl')) {
+      tfInitialized = true;
+      return;
     }
-  };
-
-  // 1. Try WebGL (Fastest)
-  if (await tryBackend('webgl')) {
+    if (await tryBackend('wasm')) {
+      tfInitialized = true;
+      return;
+    }
+    console.log('Falling back to CPU backend.');
+    await tf.setBackend('cpu');
+    await tf.ready();
     tfInitialized = true;
-    return;
-  }
-
-  // 2. Try WASM (Stable & reasonably fast)
-  if (await tryBackend('wasm')) {
-    tfInitialized = true;
-    return;
-  }
-
-  // 3. Fallback to CPU (Safest, but slow)
-  console.log('Falling back to CPU backend.');
-  await tf.setBackend('cpu');
-  await tf.ready();
-  tfInitialized = true;
+  })().catch(error => {
+    tfInitPromise = undefined;
+    throw error;
+  });
+  return tfInitPromise;
 }
 
 export async function getUpscaler(selection: ImageUpscaleModel = 'esrgan-slim-2x') {
@@ -64,18 +64,24 @@ export async function getUpscaler(selection: ImageUpscaleModel = 'esrgan-slim-2x
   await initTfjs();
   if (!imageUpscalers[model]) {
     imageUpscalers[model] = (async () => {
+      let instance: InstanceType<typeof Upscaler>;
+      let resource: string;
       if (model === 'esrgan-medium-2x') {
         const { default: medium2x } = await import('@upscalerjs/esrgan-medium/2x');
-        return new Upscaler({ model: medium2x });
-      }
-      if (model === 'esrgan-medium-4x') {
+        instance = new Upscaler({ model: medium2x });
+        resource = '@upscalerjs/esrgan-medium/2x';
+      } else if (model === 'esrgan-medium-4x') {
         const { default: medium4x } = await import('@upscalerjs/esrgan-medium/4x');
-        return new Upscaler({ model: medium4x });
-      }
-      if (model !== 'esrgan-slim-2x') {
+        instance = new Upscaler({ model: medium4x });
+        resource = '@upscalerjs/esrgan-medium/4x';
+      } else if (model === 'esrgan-slim-2x') {
+        instance = new Upscaler();
+        resource = '@upscalerjs/esrgan-slim/2x';
+      } else {
         throw new Error('선택한 모델에 맞는 TensorFlow.js 복원 엔진이 없어.');
       }
-      return new Upscaler();
+      tfjsSessionIdentity.set(instance, { modelId: model, resource, backend: tf.getBackend() });
+      return instance;
     })().catch((error) => {
       delete imageUpscalers[model];
       throw error;
@@ -107,6 +113,10 @@ export async function upscaleImage(file: File, model: ImageUpscaleModel, onProgr
 async function upscaleImageInternal(file: File, model: ImageUpscaleModel, onProgress?: (p: number) => void,
   trace?: UpscaleExecutionTrace): Promise<Blob> {
   const upscaler = await getUpscaler(model);
+  const engineIdentity = tfjsSessionIdentity.get(upscaler);
+  if (!engineIdentity || engineIdentity.modelId !== normalizeModelId(model)) {
+    throw new Error('선택한 모델과 TensorFlow.js 실행 세션이 일치하지 않아.');
+  }
 
   const img = new Image();
   const imageUrl = URL.createObjectURL(file);
@@ -136,11 +146,10 @@ async function upscaleImageInternal(file: File, model: ImageUpscaleModel, onProg
     const response = await fetch(result);
     const output = await response.blob();
     if (!output.size) throw new Error('AI 모델이 출력 이미지를 반환하지 않았어.');
-    const resolvedId = normalizeModelId(model);
-    const source = resolvedId === 'esrgan-medium-2x' ? '@upscalerjs/esrgan-medium/2x'
-      : resolvedId === 'esrgan-medium-4x' ? '@upscalerjs/esrgan-medium/4x'
-      : '@upscalerjs/esrgan-slim/2x';
-    trace?.recordInference(resolvedId, 'tfjs-' + tf.getBackend(), source);
+    if (tf.getBackend() !== engineIdentity.backend) {
+      throw new Error('작업 중 TensorFlow.js 실행 백엔드가 변경됐어.');
+    }
+    trace?.recordInference(engineIdentity.modelId, 'tfjs-' + engineIdentity.backend, engineIdentity.resource);
     return output;
   } finally {
     URL.revokeObjectURL(imageUrl);

@@ -116,7 +116,7 @@ export function useTaskQueue<T extends Task>(
           if (task.mode === 'upscale' && !result.evidence) {
             throw new Error('AI 복원 결과의 모델 실행 기록을 확인할 수 없어.');
           }
-          assertJobResultAssociation(id, result.evidence);
+          assertJobResultAssociation(id, result.evidence, task);
           if (result.evidence && result.evidence.outputBytes !== result.blob.size) {
             throw new Error('완료된 작업의 출력 크기와 다운로드 Blob이 일치하지 않아.');
           }

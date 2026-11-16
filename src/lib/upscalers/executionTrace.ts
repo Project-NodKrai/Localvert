@@ -88,6 +88,13 @@ export class UpscaleExecutionTrace {
     if (this.effective && this.effective !== modelId) {
       throw new Error('작업 도중 다른 AI 모델이 적용됐어.');
     }
+    // A video invokes the same image model for every frame. Reject a backend,
+    // URL or ONNX graph changing mid-job rather than reporting only the final
+    // session as the effective model.
+    if (this.calls > 0 && (this.engineName !== engine ||
+        this.resourceName !== resource || this.modelGraphHash !== modelGraphSha256)) {
+      throw new Error('작업 도중 모델 세션 또는 가중치 리소스가 변경됐어.');
+    }
     this.effective = modelId;
     this.engineName = engine;
     this.resourceName = resource;

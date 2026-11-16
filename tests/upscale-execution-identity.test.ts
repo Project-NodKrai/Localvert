@@ -79,3 +79,52 @@ test('download evidence cannot be associated with another job ID', () => {
   assert.throws(() => assertJobResultAssociation('job-two',
     { jobId: 'job-one' } as any), /작업 ID/);
 });
+
+
+test('queued model must match the actual effective result model before creating a Blob URL', () => {
+  const job = imageTask();
+  const evidence = {
+    jobId: 'job-1', requestedModelId: 'esrgan-slim-2x',
+    effectiveModelId: 'esrgan-slim-2x', engine: 'tfjs-webgl',
+    resource: '@upscalerjs/esrgan-slim', inferenceCalls: 1,
+  } as any;
+  assert.doesNotThrow(() => assertJobResultAssociation(job.id, evidence, job));
+  assert.throws(() => assertJobResultAssociation(job.id,
+    { ...evidence, requestedModelId: 'quicksrnet-small-4x' }, job), /요청 모델/);
+  assert.throws(() => assertJobResultAssociation(job.id,
+    { ...evidence, effectiveModelId: 'quicksrnet-small-4x' }, job), /실제 모델/);
+  assert.throws(() => assertJobResultAssociation(job.id,
+    { ...evidence, engine: 'ffmpeg-filter', effectiveModelId: null, inferenceCalls: 0 }, job), /실제 모델/);
+});
+
+test('fast filter job cannot claim to have executed an AI model', () => {
+  const job = videoTask('filter');
+  const base = {
+    jobId: job.id, requestedModelId: job.model, effectiveModelId: null,
+    engine: 'ffmpeg-filter', resource: 'unsharp+scale', inferenceCalls: 0,
+  } as any;
+  assert.doesNotThrow(() => assertJobResultAssociation(job.id, base, job));
+  assert.throws(() => assertJobResultAssociation(job.id,
+    { ...base, effectiveModelId: job.model, inferenceCalls: 1 }, job), /빠른 필터/);
+});
+
+test('model resource or session backend cannot change during a video job', () => {
+  const task = videoTask('ai');
+  const mk = () => new UpscaleExecutionTrace(makeUpscaleJobSnapshot(task));
+  const stable = mk();
+  stable.recordInference(task.model, 'onnx-wasm', '/models/quicksrnet-small-4x.onnx', 'hash-A');
+  assert.doesNotThrow(() => stable.recordInference(task.model, 'onnx-wasm', '/models/quicksrnet-small-4x.onnx', 'hash-A'));
+
+  const graphChanged = mk();
+  graphChanged.recordInference(task.model, 'onnx-wasm', '/models/quicksrnet-small-4x.onnx', 'hash-A');
+  assert.throws(() => graphChanged.recordInference(task.model,
+    'onnx-wasm', '/models/quicksrnet-small-4x.onnx', 'hash-B'), /리소스가 변경/);
+  const backendChanged = mk();
+  backendChanged.recordInference(task.model, 'onnx-wasm', '/models/quicksrnet-small-4x.onnx', 'hash-A');
+  assert.throws(() => backendChanged.recordInference(task.model,
+    'tfjs-webgl', '/models/quicksrnet-small-4x.onnx', 'hash-A'), /리소스가 변경/);
+  const resourceChanged = mk();
+  resourceChanged.recordInference(task.model, 'onnx-wasm', '/models/quicksrnet-small-4x.onnx', 'hash-A');
+  assert.throws(() => resourceChanged.recordInference(task.model,
+    'onnx-wasm', '/models/other.onnx', 'hash-A'), /리소스가 변경/);
+});

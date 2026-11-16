@@ -133,6 +133,30 @@ try {
         .map(b => b.toString(16).padStart(2, '0')).join('');
     });
   if (first !== evidence.image[0].sha256) throw new Error('First image download was replaced by a newer result');
+  // A -> B -> C -> A: reselecting a previously used model may load or reuse
+  // a session, but it must resolve to the original graph. Equal output bytes
+  // for the SAME source+model are valid; distinct jobs still require distinct URLs.
+  await slider.focus();
+  await slider.press('Home');
+  const originalUrl = await page.locator('[data-upscale-studio] li').filter({ hasText: 'image-A.png' })
+    .locator('a[data-job-id]').getAttribute('href');
+  const again = await runImageJob(page, bytes, 'image-A-again.png', 'quicksrnet-small-4x');
+  if (again.jobId === evidence.image[0].jobId ||
+      again.href === originalUrl ||
+      again.modelGraphSha256 !== evidence.image[0].modelGraphSha256 ||
+      again.digest !== evidence.image[0].sha256) {
+    throw new Error('Returning to a previous model reused a download or changed its ONNX graph');
+  }
+  evidence.sessionRevisit = {
+    model: again.effectiveModelId,
+    originalJobId: evidence.image[0].jobId,
+    revisitedJobId: again.jobId,
+    originalSha256: evidence.image[0].sha256,
+    revisitedSha256: again.digest,
+    graphSha256: again.modelGraphSha256,
+    separateBlobUrls: again.href !== originalUrl,
+  };
+  console.log('PASS A->B->C->A: model graph stable, job-specific Blob URLs independent');
   console.log('PASS image A->B->C actual ONNX inference, job-bound Blob URL and SHA256');
 
   // Video A->B->C: direct browser FFmpeg.wasm + ONNX per-frame inference,
