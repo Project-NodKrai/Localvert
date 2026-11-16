@@ -5,7 +5,7 @@ import {
   generationModel, defaultGenerationConfig,
 } from '../lib/imageGeneration/catalog';
 import type { GenerationConfig, GenerationLevel } from '../lib/imageGeneration/catalog';
-import { probeImageWebGpu, runBrowserModel, browserModelReady } from '../lib/imageGeneration/browser';
+import { probeImageWebGpu, runBrowserModel, browserModelReady, browserModelStatus } from '../lib/imageGeneration/browser';
 import type { WebGpuSupport } from '../lib/imageGeneration/browser';
 import '../styles/image-generation.css';
 
@@ -197,7 +197,7 @@ export default function ImageGeneratorPage() {
           <label className="gen-label" htmlFor="gen-model">모델</label>
           <select id="gen-model" className="gen-input" value={modelId}
             onChange={event => pickModel(event.target.value)}>
-            {modelsInLevel.map(item => <option key={item.id} value={item.id}>{item.name} · {item.use}</option>)}
+            {modelsInLevel.map(item => <option key={item.id} value={item.id}>{item.name} · {browserModelReady(item.id) ? item.use : '준비 중'}</option>)}
           </select>
           <div className="gen-model-note">
             <span>{model.use}</span>
@@ -298,7 +298,7 @@ export default function ImageGeneratorPage() {
               onClick={() => controllerRef.current?.abort()}>생성 중단</button>}
           </div>
           {!browserModelAvailable && <p className="gen-help" role="status">
-            {model.name}의 브라우저 전용 실행 엔진은 아직 준비되지 않았어.
+            {browserModelStatus(model.id)}
           </p>}
           {busy || progress ? <p className="gen-progress" role="status">{progress}</p> : null}
           {error && <div className="gen-error" role="alert">{error}</div>}
