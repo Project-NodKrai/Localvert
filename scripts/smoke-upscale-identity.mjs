@@ -266,6 +266,42 @@ try {
   }));
   console.log('PASS concurrent ONNX A/B/C model loads, execution leases and independent graph hashes');
 
+  // The first Start click creates a pending model snapshot, even when a
+  // low-memory warning needs manual confirmation. Changing the tier must
+  // invalidate that previous confirmation instead of running the old request.
+  const limited = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await limited.addInitScript(() => {
+    Object.defineProperty(navigator, 'deviceMemory', { configurable: true, value: 2 });
+  });
+  await limited.goto(origin, { waitUntil: 'domcontentloaded' });
+  await limited.locator('[data-upscale-studio]').waitFor({ state: 'visible' });
+  await limited.locator('[data-testid="upscale-file-input"]').setInputFiles({
+    name: 'low-memory.png', mimeType: 'image/png', buffer: bytes,
+  });
+  await limited.locator('[data-upscale-studio] li').filter({ hasText: 'low-memory.png' })
+    .getByText('준비 완료').waitFor({ state: 'visible', timeout: 20000 });
+  await limited.getByRole('button', { name: 'low-memory.png 복원 시작' }).click();
+  await limited.getByRole('alert').getByRole('button', { name: '그래도 실행' })
+    .waitFor({ state: 'visible', timeout: 5000 });
+  const limitedSlider = limited.getByRole('region', { name: '모델 수준' })
+    .getByRole('slider', { name: 'AI 복원 등급' });
+  await limitedSlider.focus();
+  await limitedSlider.press('Home');
+  await limited.getByRole('alert').getByRole('button', { name: '그래도 실행' })
+    .waitFor({ state: 'hidden', timeout: 5000 });
+  await limited.getByRole('button', { name: 'low-memory.png 복원 시작' }).click();
+  await limited.getByRole('alert').getByRole('button', { name: '그래도 실행' })
+    .click({ timeout: 5000 });
+  const confirmed = await waitAndRecordDownload(limited, 'low-memory.png', 'quicksrnet-small-4x');
+  evidence.warningConfirmation = {
+    priorStartCancelledOnModelChange: true,
+    confirmedJobId: confirmed.jobId,
+    executedModel: confirmed.effectiveModelId,
+    outputSha256: confirmed.digest,
+  };
+  await limited.close();
+  console.log('PASS model change invalidates pending warning; confirmed job retains its own snapshot');
+
   if (errors.length) throw new Error('Browser errors: ' + errors.join(' | '));
   writeFileSync('identity-evidence.json', JSON.stringify(evidence, null, 2) + '\n');
   console.log('PASS video A->B->C session/resource/frame/download identity');
