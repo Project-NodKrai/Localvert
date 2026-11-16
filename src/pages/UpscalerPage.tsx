@@ -104,12 +104,14 @@ export default function UpscalerPage() {
     const targets: StudioMedia[] = media === 'mixed' ? ['image', 'video'] : [media];
     const nextProfiles = { ...studioProfiles };
     for (const target of targets) {
-      // Mixed dock changes the shared tier, but each medium keeps its own
-      // purpose, model backend and video filter/AI setting.
-      nextProfiles[target] = updateStudioProfile(
-        nextProfiles[target],
-        media === 'mixed' ? { upscaleTier: updates.upscaleTier } : updates,
-      );
+      // Selecting a video AI tier/model must NEVER keep running the
+      // model-independent FFmpeg filter. Only an explicit filter choice can do so.
+      const chosen = media === 'mixed' ? { upscaleTier: updates.upscaleTier } : updates;
+      const aiSelectionChanged = chosen.model !== undefined ||
+        chosen.upscaleTier !== undefined || chosen.upscalePurpose !== undefined;
+      nextProfiles[target] = updateStudioProfile(nextProfiles[target], target === 'video' && aiSelectionChanged
+        ? { ...chosen, videoMethod: 'ai' }
+        : chosen);
     }
     setStudioProfiles(nextProfiles);
 

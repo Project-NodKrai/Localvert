@@ -10,12 +10,13 @@ interface Props {
   imageTier: UpscaleTier;
   videoTier: UpscaleTier;
   purpose: string;
+  videoMethod: 'filter' | 'ai';
   onTierChange: (tier: UpscaleTier) => void;
   onExpand: () => void;
 }
 
 export default function StudioLevelDock({
-  view, tier, imageTier, videoTier, purpose, onTierChange, onExpand,
+  view, tier, imageTier, videoTier, purpose, videoMethod, onTierChange, onExpand,
 }: Props) {
   const startY = useRef<number | null>(null);
   const position = UPSCALE_TIERS.indexOf(tier);
@@ -23,7 +24,9 @@ export default function StudioLevelDock({
     ? imageTier === videoTier
       ? TIER_LABELS[tier] + ' (혼합)'
       : TIER_LABELS[imageTier] + ' · ' + TIER_LABELS[videoTier] + ' (혼합)'
-    : TIER_LABELS[tier] + ' (' + purpose + ')';
+    : view === 'video' && videoMethod === 'filter'
+      ? '빠른 필터 · AI 모델 미사용'
+      : TIER_LABELS[tier] + ' (' + purpose + ')';
 
   function pointerDown(event: PointerEvent<HTMLButtonElement>) {
     if (event.pointerType === 'mouse' && event.button !== 0) return;

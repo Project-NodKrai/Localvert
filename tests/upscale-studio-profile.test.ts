@@ -39,3 +39,9 @@ test('image/video/mixed file selectors filter by MIME and supported extensions',
   assert.equal(canAcceptStudioFile('mixed', { name: 'sample.mp4', type: 'video/mp4' }), true);
   assert.equal(canAcceptStudioFile('mixed', { name: 'data.csv', type: 'text/csv' }), false);
 });
+
+test('explicit video model selection switches from fast filter to real AI inference', () => {
+  const selection = { ...DEFAULT_STUDIO_PROFILES.video, videoMethod: 'ai' as const };
+  assert.equal(isStudioProfileRunnable(selection, 'video'), true);
+  assert.equal(DEFAULT_STUDIO_PROFILES.video.videoMethod, 'filter');
+});

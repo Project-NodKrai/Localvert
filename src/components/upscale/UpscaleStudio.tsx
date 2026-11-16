@@ -212,6 +212,7 @@ export default function UpscaleStudio({
         imageTier={profiles.image.upscaleTier}
         videoTier={profiles.video.upscaleTier}
         purpose={focusedProfile.upscalePurpose}
+        videoMethod={profiles.video.videoMethod}
         onTierChange={updateTier}
         onExpand={openSheet}
       />
