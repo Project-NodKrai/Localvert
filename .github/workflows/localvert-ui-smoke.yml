@@ -1,0 +1,41 @@
+name: LocalVert unified UI smoke
+
+on:
+  pull_request:
+    paths:
+      - 'src/components/Header.tsx'
+      - 'src/components/FileUploader.tsx'
+      - 'src/components/FileList.tsx'
+      - 'src/components/AdvancedSettings.tsx'
+      - 'src/components/FormatSelector.tsx'
+      - 'src/pages/ConverterPage.tsx'
+      - 'src/pages/CompressorPage.tsx'
+      - 'src/pages/DetailsPage.tsx'
+      - 'src/styles/localvert-system.css'
+      - 'src/main.tsx'
+      - 'scripts/smoke-all-workspaces-ui.mjs'
+      - '.github/workflows/localvert-ui-smoke.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.57.0-noble
+      options: --ipc=host
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm install --no-save --package-lock=false playwright@1.57.0
+      - name: Verify desktop/mobile layouts and real conversion workflows
+        run: |
+          npm run dev -- --host 127.0.0.1 > /tmp/localvert-workspaces.log 2>&1 &
+          for i in $(seq 1 90); do curl -fsS http://127.0.0.1:3000/ >/dev/null && break || sleep 1; done
+          node scripts/smoke-all-workspaces-ui.mjs

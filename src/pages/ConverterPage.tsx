@@ -113,26 +113,22 @@ export default function ConverterPage() {
     useTaskQueue(tasks, setTasks, processTask);
 
   return (
-    <div className="min-h-screen bg-neutral-900 text-white font-sans selection:bg-red-500/30">
+    <div className="lv-app">
       <Header />
-      <main className="pt-12 pb-24 px-4 w-full max-w-5xl mx-auto flex flex-col items-center">
-        <div className="text-center mb-12">
-          <h1 className="text-4xl md:text-5xl font-bold mb-4 text-white tracking-tight">파일 변환</h1>
-          <h2 className="text-xl text-neutral-400 font-light max-w-2xl">
-            100% 로컬 환경에서 어떤 포맷이든 자유롭게 변환하세요.
-          </h2>
-        </div>
-
+      <main className="lv-workspace">
+        <header className="lv-page-intro">
+          <div className="lv-page-eyebrow">LOCALVERT / CONVERT</div>
+          <h1>파일 변환</h1>
+          <p>이미지, 영상, 오디오, 문서의 형식을 브라우저에서 변환해.</p>
+        </header>
+        <FileUploader onFilesAdded={handleFilesAdded} mode="convert" />
         {hasHeicPngTask && (
-          <p role="note" className="w-full max-w-4xl mb-5 rounded-lg border border-neutral-700 bg-neutral-800/50 px-4 py-3 text-sm text-neutral-300">
-            HEIC → PNG는 디코딩된 해상도를 추가 축소하거나 10MB로 재압축하지 않습니다.
-            단, 원본 EXIF 메타데이터는 보존되지 않으며 HDR·광색역 색상 정보도 온전히 유지되지 않을 수 있습니다.
+          <p role="note" className="lv-inline-note">
+            HEIC → PNG 변환에서는 디코딩된 크기를 추가 축소하거나 10MB로 재압축하지 않아.
+            원본의 EXIF와 일부 HDR·광색역 색상 정보는 보존되지 않을 수 있어.
           </p>
         )}
-
-        {tasks.length === 0 ? (
-          <FileUploader onFilesAdded={handleFilesAdded} mode="convert" />
-        ) : (
+        {tasks.length > 0 && (
           <FileList
             tasks={tasks}
             mode="convert"
@@ -145,6 +141,7 @@ export default function ConverterPage() {
             onAddMore={handleFilesAdded}
           />
         )}
+        <p className="lv-workspace-note">파일 처리 작업은 이 브라우저에서 실행돼.</p>
       </main>
     </div>
   );

@@ -1,13 +1,12 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { AnimatePresence } from 'motion/react';
+import { Download, Plus, Play, Settings, X } from 'lucide-react';
 import { Task, AppMode, ConvertTask, CompressTask, UpscaleTask, FORMATS } from '../types';
-import { X, Settings, Download, Plus, Play } from 'lucide-react';
-import { Progress } from '@/components/ui/progress';
 import { FormatSelector } from './FormatSelector';
 import AdvancedSettings from './AdvancedSettings';
 import { modelDisplayName } from '../lib/upscalers/catalog';
 
-interface FileListProps {
+interface Props {
   tasks: Task[];
   mode: AppMode;
   onFormatChange: (id: string, format: string) => void;
@@ -20,239 +19,137 @@ interface FileListProps {
   onAddMore: (files: FileList | File[]) => void;
 }
 
-function formatBytes(bytes: number, decimals = 2) {
-  if (!+bytes) return '0 Bytes';
-  const k = 1024;
-  const dm = decimals < 0 ? 0 : decimals;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+function formatBytes(bytes: number) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+  const unit = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), unit.length - 1);
+  return (bytes / 1024 ** i).toFixed(i === 0 ? 0 : 1) + ' ' + unit[i];
 }
 
-export default function FileList({ 
-  tasks, 
-  mode,
-  onFormatChange, 
-  onQualityChange,
-  onTaskUpdate,
-  onFormatChangeAll, 
-  onRemove, 
-  onProcess, 
-  onProcessAll, 
-  onAddMore 
-}: FileListProps) {
-  const [settingsTask, setSettingsTask] = useState<Task | null>(null);
-  
-  const allIdle = tasks.some(t => t.status === 'idle');
-  const isProcessing = tasks.some(t => t.status === 'processing' || t.status === 'queued');
-
-  const getModeLabel = () => {
-    if (mode === 'convert') return '변환';
-    if (mode === 'compress') return '압축';
-    if (mode === 'upscale') return 'AI 복원';
-    return '';
-  };
+export default function FileList({
+  tasks, mode, onFormatChange, onQualityChange, onTaskUpdate,
+  onFormatChangeAll, onRemove, onProcess, onProcessAll, onAddMore,
+}: Props) {
+  const [settingsTaskId, setSettingsTaskId] = useState<string | null>(null);
+  const addInputRef = useRef<HTMLInputElement>(null);
+  const settingsTask = tasks.find(task => task.id === settingsTaskId);
+  const allIdle = tasks.some(task => task.status === 'idle' && task.stored);
+  const processing = tasks.some(task => task.status === 'processing' || task.status === 'queued');
+  const modeLabel = mode === 'convert' ? '변환' : mode === 'compress' ? '압축' : '복원';
+  const compatible = tasks.reduce<string[]>((formats, task, index) =>
+    index === 0 ? [...(FORMATS[task.type] || [])] :
+      formats.filter(format => FORMATS[task.type]?.includes(format)), []);
+  const addMoreId = 'lv-add-more-' + mode;
 
   return (
-    <div className="w-full max-w-4xl bg-neutral-800 rounded-xl shadow-xl overflow-hidden flex flex-col border border-neutral-700">
-      <div className="flex-1 overflow-y-auto min-h-[300px] max-h-[60vh] p-0 m-0 relative">
-        <ul className="divide-y divide-neutral-700 m-0">
-          {tasks.map(task => (
-            <li key={task.id} className="flex flex-col md:flex-row items-start md:items-center p-4 gap-4 hover:bg-neutral-800/80 transition-colors">
-              
-              <div className="flex-1 min-w-0 flex items-center gap-3 w-full md:w-auto">
-                <div className="shrink-0 w-10 h-10 rounded flex items-center justify-center font-bold text-xs bg-neutral-700 text-neutral-300">
-                  {task.status === 'done' 
-                    ? (task.resultName?.split('.').pop() || '').toUpperCase() 
-                    : (task.file.name.split('.').pop() || '').toUpperCase()}
-                </div>
-                <div className="flex flex-col truncate">
-                  <span className="truncate text-neutral-200 font-medium">
-                    {task.status === 'done' ? task.resultName : task.file.name}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-neutral-500 text-xs">{formatBytes(task.file.size)}</span>
-                    {task.status === 'done' && task.resultSize && (
-                      <>
-                        <span className="text-neutral-600 text-[10px]">→</span>
-                        <span className="text-green-500 text-xs font-bold">{formatBytes(task.resultSize)}</span>
-                        {task.resultSize < task.file.size && (
-                          <span className="bg-green-500/10 text-green-500 text-[10px] px-1.5 py-0.5 rounded-full font-bold ml-1 border border-green-500/20">
-                            {Math.round((1 - task.resultSize / task.file.size) * 100)}% save
-                          </span>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end shrink-0">
-                
-                {task.status === 'storing' && (
-                  <div className="flex flex-col w-32 md:w-48 gap-1">
-                    <span className="text-xs text-red-400 italic font-mono uppercase tracking-tighter text-right">Storing Local...</span>
-                    <Progress value={45} className="h-1 animate-pulse bg-red-900" />
-                  </div>
-                )}
-
-                {task.status === 'idle' && (
-                  <div className="flex items-center gap-4">
-                    {task.mode === 'convert' ? (
-                      <div className="flex items-center gap-2">
-                        <span className="text-neutral-500 text-sm">에</span>
-                        <FormatSelector 
-                          currentFormat={(task as ConvertTask).targetFormat}
-                          onFormatChange={(f) => onFormatChange(task.id, f)}
-                          defaultCategory={task.type}
-                          allowedFormats={FORMATS[task.type] || []}
-                          disabled={task.type === 'unknown'}
-                        />
-                      </div>
-                    ) : task.mode === 'compress' ? (
-                      <div className="flex flex-col items-end gap-0.5">
-                        <span className="text-[10px] text-neutral-500 font-bold uppercase tracking-tight">{(task as CompressTask).settings.mode === 'advanced' ? '고급 압축' : '압축 강도'}</span>
-                        {(task as CompressTask).settings.mode === 'advanced' ? (
-                          <span className="text-xs text-red-400 font-medium">사용자 설정</span>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <input type="range" min="0" max="100" step="5"
-                              aria-label={task.file.name + ' 압축 강도'}
-                              value={(task as CompressTask).quality}
-                              onChange={(e) => onQualityChange(task.id, Number(e.target.value))}
-                              className="w-28 accent-red-500" />
-                            <span className="text-xs text-red-400 font-mono w-9 text-right">{(task as CompressTask).quality}%</span>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-end gap-0.5">
-                        <span className="text-[10px] text-neutral-500 font-bold uppercase tracking-tight">AI Upscale</span>
-                        <span className="text-xs text-red-500 font-mono font-bold">
-                          {((task as UpscaleTask).type === 'image' || ((task as UpscaleTask).type === 'video' && (task as UpscaleTask).videoMethod === 'ai')) ? modelDisplayName((task as UpscaleTask).model) : (task as UpscaleTask).videoMethod.toUpperCase()}
-                        </span>
-                      </div>
-                    )}
-                    {(task.mode === 'compress' || task.mode === 'upscale') && (
-                      <button 
-                        onClick={() => setSettingsTask(task)}
-                        className="text-neutral-400 hover:text-white p-2 hover:bg-neutral-700 rounded-xl transition-all"
-                        title="설정"
-                      >
-                        <Settings className="w-5 h-5 focus:rotate-90 transition-transform duration-500" />
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                {task.status === 'queued' && (
-                  <span className="text-neutral-400 text-sm font-medium">대기 중</span>
-                )}
-
-                {task.status === 'processing' && (
-                  <div className="flex flex-col w-32 md:w-48 gap-1">
-                    <div className="flex justify-between items-center text-[10px] font-mono text-neutral-500 uppercase tracking-widest">
-                       <span>{mode === 'convert' ? 'Converting' : mode === 'compress' ? 'Compressing' : 'Upscaling'}</span>
-                       <span>{task.progress}%</span>
-                    </div>
-                    <Progress value={task.progress} className="h-1.5" />
-                  </div>
-                )}
-
-                {task.status === 'error' && (
-                  <span className="text-red-400 text-sm truncate max-w-[150px] font-medium" title={task.errorMsg}>
-                    {task.errorMsg}
-                  </span>
-                )}
-
-                {task.status === 'done' && (
-                  <a 
-                    href={task.resultUrl} 
-                    download={task.resultName}
-                    className="flex items-center gap-1 bg-green-600 hover:bg-green-500 text-white px-3 py-1.5 rounded text-sm font-medium transition-all shadow-md hover:shadow-green-900/40"
-                  >
-                    <Download className="w-4 h-4" /> 다운로드
-                  </a>
-                )}
-
-                <div className="flex items-center gap-2 border-l border-neutral-700 pl-4">
-                   {task.status === 'idle' && (
-                     <button onClick={() => onProcess(task.id)} className="text-neutral-400 hover:text-white p-1 rounded transition-colors" title="시작">
-                       <Play className="w-5 h-5 fill-current" />
-                     </button>
-                   )}
-                   <button onClick={() => onRemove(task.id)} className="text-neutral-400 hover:text-red-400 p-1 rounded transition-colors" title="삭제">
-                     <X className="w-5 h-5" />
-                   </button>
-                </div>
-
-              </div>
-            </li>
-          ))}
-        </ul>
-
-        <AnimatePresence>
-          {settingsTask && (
-            <AdvancedSettings
-              task={tasks.find(t => t.id === settingsTask.id)!}
-              onUpdate={(updates) => onTaskUpdate?.(settingsTask.id, updates)}
-              onClose={() => setSettingsTask(null)}
-            />
-          )}
-        </AnimatePresence>
-      </div>
-
-      <div className="bg-neutral-900/80 p-4 border-t border-neutral-700 flex flex-col md:flex-row items-center justify-between gap-4 shrink-0">
-        <div className="relative">
-           <input 
-             type="file" 
-             id="add-more" 
-             multiple 
-             className="hidden" 
-             onChange={(e) => {
-               if(e.target.files?.length) onAddMore(e.target.files);
-               e.target.value = '';
-             }} 
-           />
-           <label htmlFor="add-more" className="flex items-center gap-2 bg-neutral-800/50 hover:bg-neutral-800 border border-neutral-700 px-4 py-2 rounded text-sm text-neutral-300 cursor-pointer transition-colors">
-             <Plus className="w-4 h-4" /> 더 많은 파일 추가
-           </label>
+    <section aria-label={modeLabel + ' 작업 목록'} className="lv-filelist">
+      <div className="lv-filelist-head">
+        <div>
+          <h2 className="lv-filelist-title">작업 목록 <span>{tasks.length}</span></h2>
+          <p>각 파일의 옵션과 진행 상태를 확인할 수 있어.</p>
         </div>
-
-        <div className="flex items-center gap-4">
-           {allIdle && !isProcessing && (
-             <div className="flex items-center gap-3">
-                {mode === 'convert' && tasks.length > 0 && (
-                  <div className="hidden sm:flex items-center gap-2 pr-4 border-r border-neutral-700">
-                    <span className="text-sm text-neutral-400">모든 항목을 로 변환</span>
-                    <FormatSelector 
-                      label="..."
-                      currentFormat={tasks.every(t => t.mode === 'convert' && t.targetFormat === (tasks[0] as ConvertTask).targetFormat) ? (tasks[0] as ConvertTask).targetFormat : undefined}
-                      onFormatChange={onFormatChangeAll}
-                      defaultCategory={tasks[0]?.type || 'image'}
-                      allowedFormats={tasks.reduce<string[]>((current, task, i) =>
-                        i === 0 ? [...FORMATS[task.type]] : current.filter(fmt => FORMATS[task.type].includes(fmt)), [])}
-                    />
-                  </div>
-                )}
-               <button 
-                 onClick={onProcessAll} 
-                 className="bg-red-600 hover:bg-red-500 text-white px-10 py-2.5 rounded-lg text-lg font-bold transition-all shadow-lg hover:shadow-red-900/50 active:scale-95"
-               >
-                  전체 {getModeLabel()}
-               </button>
-             </div>
-           )}
-           {isProcessing && (
-             <button 
-               disabled
-               className="bg-neutral-800 text-neutral-500 border border-neutral-700 px-10 py-2.5 rounded-lg text-lg font-bold cursor-not-allowed animate-pulse"
-             >
-                {getModeLabel()} 진행 중 ({tasks.filter(t => t.status === 'done').length}/{tasks.length})
-             </button>
-           )}
-        </div>
+        <button type="button" onClick={() => addInputRef.current?.click()}
+          className="lv-button lv-button-subtle lv-add-label">
+          <Plus size={17} aria-hidden="true" /> 파일 추가
+        </button>
+        <input ref={addInputRef} id={addMoreId} type="file" multiple className="lv-visually-hidden"
+          onChange={event => { if (event.target.files?.length) onAddMore(event.target.files); event.target.value = ''; }} />
       </div>
-    </div>
+      <ul className="lv-task-list">
+        {tasks.map(task => (
+          <li className="lv-task-row" key={task.id}>
+            <span className="lv-filetype" aria-hidden="true">
+              {(task.status === 'done' ? task.resultName : task.file.name)?.split('.').pop()?.slice(0, 5).toUpperCase()}
+            </span>
+            <div className="lv-task-identity">
+              <p className="lv-task-name" title={task.file.name}>{task.status === 'done' ? task.resultName : task.file.name}</p>
+              <p className="lv-task-meta">
+                {formatBytes(task.file.size)}
+                {task.status === 'done' && task.resultSize != null && <> → {formatBytes(task.resultSize)}
+                  {task.resultSize < task.file.size && <> · {Math.round((1 - task.resultSize / task.file.size) * 100)}% 절약</>}
+                </>}
+              </p>
+              {task.status === 'error' && <p className="lv-task-error" role="alert">{task.errorMsg || '처리하지 못했어.'}</p>}
+              {task.status === 'processing' && (
+                <div className="lv-task-progress-group">
+                  <div className="lv-task-progress-meta"><span>처리 중</span><span>{task.progress}%</span></div>
+                  <progress aria-label={task.file.name + ' 진행률'} className="lv-progress" value={task.progress} max={100} />
+                </div>
+              )}
+            </div>
+            <div className="lv-task-options">
+              {task.status === 'idle' && task.mode === 'convert' && (
+                <FormatSelector currentFormat={(task as ConvertTask).targetFormat}
+                  onFormatChange={format => onFormatChange(task.id, format)}
+                  defaultCategory={task.type} allowedFormats={FORMATS[task.type] || []}
+                  disabled={task.type === 'unknown'} />
+              )}
+              {task.status === 'idle' && task.mode === 'compress' && (
+                (task as CompressTask).settings.mode === 'advanced' ?
+                  <span className="lv-task-hint">고급 압축</span> :
+                  <label className="lv-quality">
+                    <span>강도 {((task as CompressTask).quality)}%</span>
+                    <input type="range" min={0} max={100} step={5}
+                      aria-label={task.file.name + ' 압축 강도'}
+                      value={(task as CompressTask).quality}
+                      onChange={event => onQualityChange(task.id, Number(event.target.value))} />
+                  </label>
+              )}
+              {task.status === 'idle' && task.mode === 'upscale' && (
+                <span className="lv-task-hint">
+                  {task.type === 'video' && (task as UpscaleTask).videoMethod === 'filter'
+                    ? '빠른 필터' : modelDisplayName((task as UpscaleTask).model)}
+                </span>
+              )}
+              {(task.status === 'queued' || task.status === 'storing') &&
+                <span className="lv-task-state">{task.status === 'queued' ? '대기 중' : '파일 준비 중'}</span>}
+              {task.status === 'done' && task.resultUrl && (
+                <a className="lv-button lv-button-success" href={task.resultUrl} download={task.resultName}>
+                  <Download size={16} aria-hidden="true" /> 다운로드
+                </a>
+              )}
+              {task.status === 'idle' && (task.mode === 'compress' || task.mode === 'upscale') &&
+                <button type="button" className="lv-icon-button" onClick={() => setSettingsTaskId(task.id)}
+                  aria-label={task.file.name + ' 설정'} title="설정">
+                  <Settings size={19} aria-hidden="true" />
+                </button>}
+              {task.status === 'idle' && (
+                <button type="button" className="lv-icon-button lv-icon-primary" onClick={() => onProcess(task.id)}
+                  aria-label={task.file.name + ' ' + modeLabel + ' 시작'} title="시작">
+                  <Play size={18} aria-hidden="true" />
+                </button>
+              )}
+              <button type="button" className="lv-icon-button lv-icon-remove"
+                onClick={() => onRemove(task.id)} aria-label={task.file.name + ' 삭제'} title="삭제">
+                <X size={18} aria-hidden="true" />
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+      <div className="lv-filelist-actions">
+        {mode === 'convert' && allIdle && compatible.length > 0 &&
+          <div className="lv-bulk-format">
+            <span>모든 항목의 형식</span>
+            <FormatSelector currentFormat={tasks.every(task => task.mode === 'convert' &&
+              task.targetFormat === (tasks[0] as ConvertTask).targetFormat)
+              ? (tasks[0] as ConvertTask).targetFormat : undefined}
+              onFormatChange={onFormatChangeAll} defaultCategory={tasks[0]?.type ?? 'image'}
+              allowedFormats={compatible} />
+          </div>}
+        {processing
+          ? <span role="status" className="lv-processing-status">{modeLabel} 진행 중 · {tasks.filter(t => t.status === 'done').length}/{tasks.length}</span>
+          : <button type="button" className="lv-button lv-button-primary" disabled={!allIdle} onClick={onProcessAll}>
+              전체 {modeLabel}
+            </button>}
+      </div>
+      <AnimatePresence>
+        {settingsTask && (
+          <AdvancedSettings task={settingsTask}
+            onUpdate={updates => onTaskUpdate?.(settingsTask.id, updates)}
+            onClose={() => setSettingsTaskId(null)} />
+        )}
+      </AnimatePresence>
+    </section>
   );
 }

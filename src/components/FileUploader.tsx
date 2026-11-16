@@ -1,6 +1,7 @@
-import { useRef, DragEvent, ChangeEvent } from 'react';
-import { Upload } from 'lucide-react';
-import { AppMode } from '../types';
+import { useRef, useState } from 'react';
+import type { DragEvent, ChangeEvent } from 'react';
+import { Upload, FolderOpen } from 'lucide-react';
+import type { AppMode } from '../types';
 
 interface FileUploaderProps {
   onFilesAdded: (files: FileList | File[]) => void;
@@ -9,53 +10,36 @@ interface FileUploaderProps {
 
 export default function FileUploader({ onFilesAdded, mode }: FileUploaderProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+  const title = mode === 'convert' ? '변환할 파일을 추가해.' : '압축할 파일을 추가해.';
 
-  const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
+  const handleDrop = (event: DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    setDragging(false);
+    if (event.dataTransfer.files.length) onFilesAdded(event.dataTransfer.files);
   };
 
-  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      onFilesAdded(e.dataTransfer.files);
-      e.dataTransfer.clearData();
-    }
-  };
-
-  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      onFilesAdded(e.target.files);
-      // Reset input so the same file could be selected again if removed
-      e.target.value = '';
-    }
+  const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files?.length) onFilesAdded(event.target.files);
+    event.target.value = '';
   };
 
   return (
-    <div className="w-full max-w-3xl flex flex-col items-center gap-6">
-      <div 
-        className="w-full h-48 md:h-64 rounded-xl bg-red-600 hover:bg-red-500 shadow-2xl flex flex-col items-center justify-center cursor-pointer transition-colors border-2 border-dashed border-red-400 group"
-        onClick={() => fileInputRef.current?.click()}
-        onDragOver={handleDragOver}
-        onDrop={handleDrop}
-      >
-        <Upload className="w-12 h-12 text-white mb-4 group-hover:scale-110 transition-transform" />
-        <span className="text-xl md:text-2xl font-bold text-white mb-2 uppercase tracking-tight">
-          {mode === 'convert' ? '파일 변환하기' : '용량 압축하기'}
-        </span>
-        <span className="text-red-100 text-sm font-medium opacity-80">파일을 드래그하거나 클릭하여 시작하세요</span>
-        
-        <input 
-          type="file" 
-          ref={fileInputRef} 
-          className="hidden" 
-          multiple 
-          onChange={handleChange} 
-        />
-      </div>
-      
-      <p className="text-neutral-500 text-sm">
-        이 서비스는 완전한 로컬(클라이언트 사이드) 환경에서 동작합니다. 파일은 서버로 전송되지 않습니다.
-      </p>
-    </div>
+    <section aria-label="파일 업로드" className={'lv-dropzone' + (dragging ? ' is-dragging' : '')}
+      onDragOver={event => { event.preventDefault(); setDragging(true); }}
+      onDragLeave={event => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragging(false);
+      }}
+      onDrop={handleDrop}>
+      <div className="lv-dropzone-icon"><Upload size={28} strokeWidth={1.8} aria-hidden="true" /></div>
+      <h2 className="lv-dropzone-title">{title}</h2>
+      <p className="lv-dropzone-desc">파일을 끌어다 놓거나 아래 버튼을 눌러 선택해.</p>
+      <input type="file" ref={fileInputRef} className="lv-visually-hidden"
+        data-testid={mode + '-file-input'} aria-label={title}
+        multiple onChange={handleChange} />
+      <button type="button" className="lv-button lv-button-primary" onClick={() => fileInputRef.current?.click()}>
+        <FolderOpen size={18} aria-hidden="true" /> 파일 선택
+      </button>
+    </section>
   );
 }

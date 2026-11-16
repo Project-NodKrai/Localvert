@@ -1,81 +1,101 @@
-import { motion } from 'motion/react';
+import { Link } from 'react-router-dom';
 import Header from '../components/Header';
-import { ArrowLeft, Shield, Zap, Lock, Globe } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import type { ReactNode } from 'react';
+
+const features = [
+  {
+    to: '/',
+    icon: 'convert',
+    title: '파일 변환',
+    description: '이미지, 동영상, 오디오, 문서 등 파일 종류에 맞는 출력 형식을 선택해 변환해.',
+    action: '변환 화면 열기',
+  },
+  {
+    to: '/compress',
+    icon: 'compress',
+    title: '용량 압축',
+    description: '이미지와 동영상의 압축 강도, 형식, 해상도와 오디오 옵션을 조정해.',
+    action: '압축 화면 열기',
+  },
+  {
+    to: '/upscale',
+    icon: 'upscale',
+    title: '고화질 복원',
+    description: '실사, 일러스트, 애니메이션 및 동영상에 맞는 AI 모델과 복원 등급을 선택해.',
+    action: '복원 화면 열기',
+  },
+] as const;
 
 export default function DetailsPage() {
-  const navigate = useNavigate();
-
   return (
-    <div className="min-h-screen bg-neutral-900 text-white font-sans">
+    <div className="lv-app">
       <Header />
-      
-      <main className="max-w-4xl mx-auto px-4 py-20">
-        <motion.button
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          onClick={() => navigate('/')}
-          className="flex items-center gap-2 text-neutral-400 hover:text-white transition-colors mb-8 group"
-        >
-          <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
-          돌아가기
-        </motion.button>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-        >
-          <h1 className="text-4xl md:text-5xl font-bold mb-6 tracking-tight">
-            왜 <span className="text-red-500">Localvert</span>인가요?
-          </h1>
-          <p className="text-xl text-neutral-400 mb-16 leading-relaxed">
-            Localvert는 단순히 파일을 변환하는 도구 그 이상입니다. 사용자의 데이터를 존중하고, 
-            100% 무료로 제한 없이 서비스를 제공해드립니다..
-          </p>
-        </motion.div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-20">
-          <FeatureCard 
-            icon={<Shield className="w-6 h-6 text-red-500" />}
-            title="100% 로컬"
-            description="모든 변환 과정은 당신의 브라우저 안에서만 일어납니다. 파일이 서버로 업로드되지 않아 절대적으로 안전합니다."
-          />
-          <FeatureCard 
-            icon={<Zap className="w-6 h-6 text-red-500" />}
-            title="WASM 가속"
-            description="WebAssembly 기술을 사용하여 서버를 거치지 않고도 하드웨어의 성능을 최대한 끌어내어 빠른 속도를 보장합니다."
-          />
-          <FeatureCard 
-            icon={<Lock className="w-6 h-6 text-red-500" />}
-            title="데이터 프라이버시"
-            description="어떤 로그도, 어떤 캐시도 서버에 저장되지 않습니다. 변환 후 브라우저를 닫으면 모든 흔적이 사라집니다."
-          />
-          <FeatureCard 
-            icon={<Globe className="w-6 h-6 text-red-500" />}
-            title="안정성"
-            description="신뢰도 있는 FFmpeg 엔진을 기반으로 구동되어 높은 안정성을 자랑합니다."
-          />
-        </div>
+      <main className="lv-workspace lv-details-workspace">
+        <header className="lv-page-intro">
+          <div className="lv-page-eyebrow">LOCALVERT / DETAILS</div>
+          <h1>기능 안내</h1>
+          <p>파일 종류와 목적에 맞는 작업을 선택해.</p>
+        </header>
+        <section aria-labelledby="lv-features-title">
+          <h2 id="lv-features-title" className="lv-section-title">파일 작업</h2>
+          <div className="lv-feature-grid">
+            {features.map(feature => {
+              return (
+                <article key={feature.to} className="lv-feature-card">
+                  <div className="lv-feature-icon"><FeatureGlyph type={feature.icon} /></div>
+                  <h3>{feature.title}</h3>
+                  <p>{feature.description}</p>
+                  <Link className="lv-feature-link" to={feature.to}>
+                    {feature.action} <span aria-hidden="true">→</span>
+                  </Link>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+        <section id="privacy" aria-labelledby="lv-privacy-title" className="lv-privacy-panel">
+          <div className="lv-feature-icon"><FeatureGlyph type="privacy" /></div>
+          <div>
+            <h2 id="lv-privacy-title">브라우저에서 파일 처리</h2>
+            <p>
+              선택한 파일은 브라우저 안에서 변환·압축·복원돼. 처리에 필요한 엔진이나 AI 모델 파일은
+              처음 실행할 때 다운로드될 수 있어. 작업 중 파일을 임시로 보관하기 위해 브라우저 저장소를 사용하며,
+              결과물은 직접 다운로드할 수 있어.
+            </p>
+          </div>
+        </section>
       </main>
-      
-      <footer className="border-t border-neutral-800 py-12 text-center text-neutral-500 text-sm">
-        &copy; 2026 Localvert. All rights reserved. 100% Client-side.
-      </footer>
+      <footer className="lv-footer">© 2026 Localvert · 브라우저 기반 파일 도구</footer>
     </div>
   );
 }
 
-function FeatureCard({ icon, title, description }: { icon: ReactNode, title: string, description: string }) {
+
+type Glyph = 'convert' | 'compress' | 'upscale' | 'privacy';
+
+/** Product-specific 24px geometry; no new icon library or theme preset. */
+function FeatureGlyph({ type }: { type: Glyph }) {
+  const props = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.85,
+    strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   return (
-    <motion.div 
-      whileHover={{ y: -5 }}
-      className="p-8 rounded-2xl bg-neutral-800/30 border border-neutral-800 hover:border-neutral-700 transition-colors"
-    >
-      <div className="mb-4">{icon}</div>
-      <h3 className="text-xl font-bold mb-3">{title}</h3>
-      <p className="text-neutral-400 leading-relaxed">{description}</p>
-    </motion.div>
+    <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" {...props}>
+      {type === 'convert' && <>
+        <path d="M5 3.5h9l4 4v5M14 3.5v4h4M5 3.5V20h8" />
+        <path d="M12 14h9m-3-3 3 3-3 3" />
+      </>}
+      {type === 'compress' && <>
+        <rect x="4" y="3.5" width="16" height="17" rx="3" />
+        <path d="M9 7.5h6M7.5 12h9M10 16.5h4" />
+        <path d="m8 10 2 2-2 2m8-4-2 2 2 2" />
+      </>}
+      {type === 'upscale' && <>
+        <rect x="3" y="6" width="15" height="14" rx="2" />
+        <circle cx="8" cy="10" r="1.5" />
+        <path d="m4.5 18 4.5-4 3 2 3-3 2 2.5M20 2v7m-3.5-3.5h7" />
+      </>}
+      {type === 'privacy' && <>
+        <path d="M12 2.5 20 6v6.5c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3.5Z" />
+        <path d="m8.5 12.5 2.4 2.3 4.7-5" />
+      </>}
+    </svg>
   );
 }
