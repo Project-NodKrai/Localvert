@@ -183,6 +183,12 @@ export default function UpscaleStudio({
                         <a href={task.resultUrl} download={task.resultName}
                           data-job-id={task.id}
                           data-effective-model-id={task.resultEvidence?.effectiveModelId ?? 'none'}
+                          data-video-method={task.videoMethod}
+                          data-model-resource={task.resultEvidence?.resource ?? ''}
+                          data-model-graph-sha256={task.resultEvidence?.modelGraphSha256 ?? ''}
+                          data-inference-calls={task.resultEvidence?.inferenceCalls ?? 0}
+                          data-inferred-frames={task.resultEvidence?.inferredFrames ?? 0}
+                          data-encoded-frames={task.resultEvidence?.encodedFrames ?? 0}
                           data-output-sha256={task.resultEvidence?.outputSha256 ?? ''}
                           data-output-bytes={task.resultEvidence?.outputBytes ?? task.resultSize}
                           className="flex items-center gap-1 rounded-lg bg-[#E6F8EF] px-3 py-2 text-xs font-bold text-[#20865A]">
