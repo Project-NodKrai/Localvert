@@ -9,6 +9,9 @@ on:
       - 'src/components/AdvancedSettings.tsx'
       - 'src/components/FileList.tsx'
       - 'src/pages/UpscalerPage.tsx'
+      - 'public/404.html'
+      - 'index.html'
+      - 'scripts/smoke-pages-deep-links.mjs'
       - 'src/lib/upscalers/studio.ts'
       - 'src/components/upscale/StudioLevelDock.tsx'
       - 'src/index.css'
@@ -40,3 +43,8 @@ jobs:
           npm run dev -- --host 127.0.0.1 > /tmp/localvert-ui.log 2>&1 &
           for i in $(seq 1 90); do curl -fsS http://127.0.0.1:3000/upscale >/dev/null && break || sleep 1; done
           node scripts/smoke-upscale-ui.mjs
+      - name: Build and test direct URLs against GitHub Pages-style 404 routing
+        run: |
+          npm run build
+          test -s dist/404.html
+          node scripts/smoke-pages-deep-links.mjs
