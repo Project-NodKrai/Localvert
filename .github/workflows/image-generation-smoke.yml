@@ -1,4 +1,4 @@
-name: Image generation UI and ComfyUI protocol
+name: Browser-only image generation UI and GPU routing
 
 on:
   pull_request:
@@ -30,7 +30,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm install --no-save --package-lock=false playwright@1.57.0
-      - name: Verify image generation UI and job-identity through simulated local ComfyUI
+      - name: Verify browser-only UI and isolated mocked WebGPU results
         run: |
           npm run dev -- --host 127.0.0.1 > /tmp/localvert-image-generation.log 2>&1 &
           for i in $(seq 1 90); do curl -fsS http://127.0.0.1:3000/generate >/dev/null && break || sleep 1; done

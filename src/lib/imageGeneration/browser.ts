@@ -126,3 +126,48 @@ export async function runBrowserFluxKlein(args: {
   return await new Promise<Blob>((resolve, reject) => canvas.toBlob(
     blob => blob ? resolve(blob) : reject(new Error('PNG 인코딩 실패')), 'image/png'));
 }
+
+
+export type BrowserModelId = 'sana-sprint-06b' | 'flux2-klein-4b';
+
+/**
+ * Only mark a model ready after a browser-compatible, model-identical weight
+ * distribution and its tensor contract have been verified. Ordinary SANA
+ * 0.6B ONNX weights are NOT interchangeable with SANA-Sprint 0.6B.
+ */
+export const BROWSER_MODEL_STATE: Readonly<Record<BrowserModelId, {
+  ready: boolean;
+  status: string;
+}>> = {
+  'sana-sprint-06b': {
+    ready: false,
+    status: 'SANA-Sprint 0.6B는 원본 가중치만 확인됐어. Sprint용 WebGPU/ONNX 변환본이 없어 아직 실행할 수 없어.',
+  },
+  'flux2-klein-4b': {
+    ready: true,
+    status: 'WebGPU 실험 엔진 연결됨 · 실제 GPU 생성 검증 전',
+  },
+};
+
+export function browserModelReady(modelId: string): boolean {
+  return modelId in BROWSER_MODEL_STATE &&
+    BROWSER_MODEL_STATE[modelId as BrowserModelId].ready;
+}
+
+export function browserModelStatus(modelId: string): string {
+  return modelId in BROWSER_MODEL_STATE
+    ? BROWSER_MODEL_STATE[modelId as BrowserModelId].status
+    : '브라우저용 실행 엔진이 아직 이식되지 않았어.';
+}
+
+/** One browser-only router. No network inference endpoints or local servers. */
+export function runBrowserModel(args: {
+  modelId: string;
+  config: GenerationConfig;
+  seed: number;
+  signal: AbortSignal;
+  onState: (status: string) => void;
+}): Promise<Blob> {
+  if (args.modelId === 'flux2-klein-4b') return runBrowserFluxKlein(args);
+  throw new Error(browserModelStatus(args.modelId));
+}

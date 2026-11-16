@@ -8,7 +8,6 @@ export type GenerationModel = Readonly<{
   params: string;
   use: string;
   checkpointUrl: string;
-  patterns: readonly string[];
   steps: Readonly<{ min: number; max: number; initial: number }>;
   cfg: number | null;
   negative: boolean;
@@ -16,55 +15,48 @@ export type GenerationModel = Readonly<{
   licensing: string;
 }>;
 
-// These are model identities, NOT pre-installed in the browser. A chosen model
-// requires a validated API-format ComfyUI workflow and its local checkpoint.
+// Model catalogue is separate from browser runtime availability. Unsupported entries
+// remain discoverable but cannot be run until their local WebGPU engines are verified.
 export const GENERATION_MODELS: readonly GenerationModel[] = [
   {
     id: 'sana-sprint-06b', level: 'instant', name: 'SANA-Sprint 0.6B',
     params: '0.6B', use: '빠른 이미지 생성', checkpointUrl: 'https://nvlabs.github.io/Sana/Sprint/',
-    patterns: ['sana-sprint-0.6', 'sana_sprint_0.6', 'sana_sprint_06', 'sana_sprint_600m', 'sana-sprint-600m'],
     steps: { min: 1, max: 4, initial: 4 }, cfg: null, negative: false,
     licensing: '체크포인트 라이선스 확인',
   },
   {
     id: 'sana-sprint-16b', level: 'instant', name: 'SANA-Sprint 1.6B',
     params: '1.6B', use: '일반 이미지 생성', checkpointUrl: 'https://nvlabs.github.io/Sana/Sprint/',
-    patterns: ['sana-sprint-1.6', 'sana_sprint_1.6', 'sana_sprint_16', 'sana_sprint_1600m'],
     steps: { min: 1, max: 4, initial: 4 }, cfg: null, negative: false,
     licensing: '체크포인트 라이선스 확인',
   },
   {
     id: 'iris-3b-turbo', level: 'instant', name: 'Iris-3B Turbo',
     params: '3B', use: '고속 이미지 생성', checkpointUrl: 'https://huggingface.co/speridlabs/iris-3b',
-    patterns: ['iris-3b', 'iris_3b', 'iris3b'],
     steps: { min: 4, max: 4, initial: 4 }, cfg: null, negative: false,
     licensing: '모델·Turbo LoRA 별도 확인',
   },
   {
     id: 'anima-turbo-2b', level: 'medium', name: 'Anima-Turbo',
     params: '2B', use: '애니메이션·일러스트', checkpointUrl: 'https://huggingface.co/circlestone-labs/Anima',
-    patterns: ['anima', 'anima-turbo', 'anima_turbo'],
     steps: { min: 8, max: 12, initial: 8 }, cfg: 1, negative: false,
     sampler: 'euler', licensing: 'CircleStone Labs Non-Commercial',
   },
   {
     id: 'flux2-klein-4b', level: 'medium', name: 'FLUX.2 Klein 4B',
     params: '4B', use: '범용·참조 이미지', checkpointUrl: 'https://huggingface.co/black-forest-labs/FLUX.2-klein-4B',
-    patterns: ['flux-2-klein-4b', 'flux_2_klein_4b', 'flux2-klein-4b', 'flux2_klein_4b', 'flux-2-klein-4b-fp8'],
     steps: { min: 4, max: 4, initial: 4 }, cfg: null, negative: false,
     licensing: 'Apache-2.0',
   },
   {
     id: 'z-image-turbo', level: 'high', name: 'Z-Image-Turbo',
     params: '6B', use: '실사·인물·풍경', checkpointUrl: 'https://huggingface.co/Tongyi-MAI/Z-Image-Turbo',
-    patterns: ['z-image-turbo', 'z_image_turbo', 'zimage_turbo', 'z-image-turbo-nvfp4'],
     steps: { min: 8, max: 9, initial: 9 }, cfg: null, negative: false,
     sampler: 'euler', licensing: 'Apache-2.0',
   },
   {
     id: 'qwen-image-21-turbo', level: 'high', name: 'Qwen-Image-2.1 Turbo',
     params: '7B', use: '텍스트·정교한 구도', checkpointUrl: 'https://huggingface.co/Qwen/Qwen-Image-2.1-Turbo',
-    patterns: ['qwen-image-2.1-turbo', 'qwen_image_2.1_turbo', 'qwen-image-21-turbo', 'qwen_image_21_turbo'],
     steps: { min: 8, max: 8, initial: 8 }, cfg: null, negative: false,
     licensing: 'Qwen Research License',
   },

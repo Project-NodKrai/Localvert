@@ -1,17 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ChangeEvent } from 'react';
 import Header from '../components/Header';
 import {
   GENERATION_LEVELS, GENERATION_MODELS, DEFAULT_MODEL_BY_LEVEL,
   generationModel, defaultGenerationConfig,
 } from '../lib/imageGeneration/catalog';
 import type { GenerationConfig, GenerationLevel } from '../lib/imageGeneration/catalog';
-import {
-  parseComfyWorkflow, detectBindings, fieldExists, listFields,
-  validateWorkflowModel, fetchComfyStatus, runComfyWorkflow,
-} from '../lib/imageGeneration/comfy';
-import type { ComfyWorkflow, WorkflowBindings, FieldRef } from '../lib/imageGeneration/comfy';
-import { probeImageWebGpu, runBrowserFluxKlein } from '../lib/imageGeneration/browser';
+import { probeImageWebGpu, runBrowserModel, browserModelReady, browserModelStatus } from '../lib/imageGeneration/browser';
 import type { WebGpuSupport } from '../lib/imageGeneration/browser';
 import '../styles/image-generation.css';
 
@@ -26,21 +20,6 @@ const GUIDED: Array<{ key: keyof GenerationConfig; label: string; choices: strin
   { key: 'background', label: '배경', choices: ['스튜디오', '실내', '도시', '숲', '일몰'] },
   { key: 'texture', label: '표현', choices: ['섬세한 질감', '깨끗한 선화', '부드러운 음영'] },
 ];
-const BINDING_LABELS: Array<{ key: keyof WorkflowBindings; label: string }> = [
-  { key: 'prompt', label: 'Positive Prompt' },
-  { key: 'negative', label: 'Negative Prompt' },
-  { key: 'seed', label: 'Seed' },
-  { key: 'steps', label: 'Sampling Steps' },
-  { key: 'cfg', label: 'Guidance Scale' },
-  { key: 'width', label: 'Width' },
-  { key: 'height', label: 'Height' },
-  { key: 'sampler', label: 'Sampler' },
-  { key: 'scheduler', label: 'Scheduler' },
-  { key: 'batch', label: 'Batch Size' },
-  { key: 'lora', label: 'LoRA' },
-  { key: 'loraStrength', label: 'LoRA Strength' },
-];
-
 function saveBlob(blob: Blob): string {
   const href = URL.createObjectURL(blob);
   return href;
@@ -75,18 +54,12 @@ async function encodeOutput(blob: Blob, type: GenerationConfig['outputFormat'], 
 }
 
 export default function ImageGeneratorPage() {
-  const [execution, setExecution] = useState<'browser' | 'comfy'>('browser');
   const [browserSupport, setBrowserSupport] = useState<WebGpuSupport | null>(null);
   const [allowModelDownload, setAllowModelDownload] = useState(false);
   const [level, setLevel] = useState<GenerationLevel>('instant');
   const [modelId, setModelId] = useState(DEFAULT_MODEL_BY_LEVEL.instant);
   const model = generationModel(modelId);
   const [config, setConfig] = useState<GenerationConfig>(() => defaultGenerationConfig(model));
-  const [endpoint, setEndpoint] = useState('http://127.0.0.1:8188/');
-  const [connection, setConnection] = useState<'idle' | 'checking' | 'ready' | 'error'>('idle');
-  const [workflow, setWorkflow] = useState<ComfyWorkflow | null>(null);
-  const [workflowName, setWorkflowName] = useState('');
-  const [bindings, setBindings] = useState<WorkflowBindings>({});
   const [showSettings, setShowSettings] = useState(false);
   const [showConnection, setShowConnection] = useState(false);
   const [showMapping, setShowMapping] = useState(false);
@@ -97,7 +70,6 @@ export default function ImageGeneratorPage() {
   const [busy, setBusy] = useState(false);
   const controllerRef = useRef<AbortController | null>(null);
   const urlsRef = useRef(new Set<string>());
-  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => () => {
     controllerRef.current?.abort();
@@ -111,21 +83,10 @@ export default function ImageGeneratorPage() {
     return () => { alive = false; };
   }, []);
 
-  const browserModelAvailable = modelId === 'flux2-klein-4b';
-  const fields = workflow ? listFields(workflow) : [];
-  const availableResources = workflow ? (() => {
-    try { return validateWorkflowModel(workflow, model); } catch { return []; }
-  })() : [];
-  const modelMatched = availableResources.length > 0;
-  const promptBound = !!workflow && fieldExists(workflow, bindings.prompt);
-  const requiredFields = (['seed', 'steps', 'width', 'height'] as const)
-    .filter(key => !fieldExists(workflow || {}, bindings[key]));
+  const browserModelAvailable = browserModelReady(modelId);
+  const canGenerate = !!config.prompt.trim() && !busy && browserModelAvailable &&
+    browserSupport?.available === true && allowModelDownload;
 
-  const canGenerate = !!config.prompt.trim() && !busy && (
-    execution === 'browser'
-      ? browserModelAvailable && browserSupport?.available === true && allowModelDownload
-      : !!workflow && modelMatched && promptBound && !requiredFields.length
-  );
   const modelsInLevel = GENERATION_MODELS.filter(item => item.level === level);
 
   function registerUrl(blob: Blob): string {
@@ -149,9 +110,11 @@ export default function ImageGeneratorPage() {
     setConfig(previous => ({
       ...previous, steps: next.steps.initial, cfg: next.cfg ?? 1,
       sampler: next.sampler ?? previous.sampler,
-      ...(execution === 'browser' && id === 'flux2-klein-4b'
-        ? { width: 512, height: 512, batchSize: 1 } : {}),
+      width: id === 'sana-sprint-06b' ? 1024 : 512,
+      height: id === 'sana-sprint-06b' ? 1024 : 512,
+      batchSize: 1,
     }));
+    setAllowModelDownload(false);
     setError('');
   }
 
@@ -159,135 +122,50 @@ export default function ImageGeneratorPage() {
     setConfig(previous => ({ ...previous, width, height }));
   }
 
-  async function loadWorkflow(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) return;
-    try {
-      if (file.size > 3 * 1024 * 1024) throw new Error('워크플로 JSON은 3MB 이하만 가져올 수 있어.');
-      const value = JSON.parse(await file.text()) as unknown;
-      const graph = parseComfyWorkflow(value);
-      setWorkflow(graph);
-      const mapped = detectBindings(graph);
-      setBindings(mapped);
-      setWorkflowName(file.name);
-      // Keep the imported workflow's sampler/scheduler rather than silently
-      // replacing model-specific defaults on the first generation.
-      const samplerValue = mapped.sampler && graph[mapped.sampler.nodeId]?.inputs[mapped.sampler.field];
-      const schedulerValue = mapped.scheduler && graph[mapped.scheduler.nodeId]?.inputs[mapped.scheduler.field];
-      setConfig(previous => ({
-        ...previous,
-        sampler: typeof samplerValue === 'string' ? samplerValue : previous.sampler,
-        scheduler: typeof schedulerValue === 'string' ? schedulerValue : previous.scheduler,
-      }));
-      setShowConnection(true);
-      setError('');
-    } catch (cause) {
-      setWorkflow(null);
-      setBindings({});
-      setWorkflowName('');
-      setError(cause instanceof Error ? cause.message : '워크플로를 읽지 못했어.');
-    }
-  }
-
-  async function checkConnection() {
-    try {
-      setConnection('checking');
-      setError('');
-      await fetchComfyStatus(endpoint);
-      setConnection('ready');
-    } catch (cause) {
-      setConnection('error');
-      setError(cause instanceof Error ? cause.message :
-        '연결할 수 없어. ComfyUI의 CORS 설정과 실행 상태를 확인해.');
-    }
-  }
-
-  function changeBinding(key: keyof WorkflowBindings, value: string) {
-    setBindings(current => ({
-      ...current,
-      [key]: value ? JSON.parse(value) as FieldRef : undefined,
-    }));
-  }
-
   async function generate() {
-    if (!canGenerate || busy || (execution === 'comfy' && !workflow)) return;
+    if (!canGenerate || busy) return;
     const snapshot = structuredClone(config);
     const selected = model;
-    const selectedBindings = structuredClone(bindings);
-    const selectedWorkflow = workflow ? structuredClone(workflow) : null;
-    const endpointSnapshot = endpoint;
+    const modelIdSnapshot = modelId;
     const controller = new AbortController();
     controllerRef.current = controller;
     setBusy(true);
-    setProgress('모델 워크플로 확인 중');
+    setProgress('브라우저 GPU 모델 준비 중');
     setError('');
     try {
-      // Fail closed if a previous selection has left a mismatched workflow.
-      if (execution === 'comfy') {
-        if (!selectedWorkflow) throw new Error('ComfyUI 워크플로가 없어.');
-        validateWorkflowModel(selectedWorkflow, selected);
-        await fetchComfyStatus(endpointSnapshot, controller.signal);
-        setConnection('ready');
-      } else if (!browserModelAvailable) {
-        throw new Error('해당 모델은 브라우저 구동 준비 중이야.');
+      if (!browserModelReady(modelIdSnapshot)) {
+        throw new Error('이 모델에는 브라우저 추론 엔진이 아직 연결되지 않았어.');
       }
-      const maxSize = execution === 'browser' ? 1024 : 2048;
       if (!Number.isInteger(snapshot.batchCount) || snapshot.batchCount < 1 || snapshot.batchCount > 3 ||
-          !Number.isInteger(snapshot.batchSize) || snapshot.batchSize < 1 || snapshot.batchSize > 4 ||
-          ![snapshot.width, snapshot.height].every(n => Number.isInteger(n) && n >= 256 && n <= maxSize && n % 64 === 0)) {
-        throw new Error('생성 개수는 1~3회, 해상도는 256~' + maxSize + 'px(64px 단위)로 지정해.');
-      }
-      if (execution === 'browser' && snapshot.batchSize !== 1) {
-        throw new Error('브라우저 모델은 Batch Size 1로 순차 실행해.');
+          snapshot.batchSize !== 1 ||
+          ![snapshot.width, snapshot.height].every(n =>
+            Number.isInteger(n) && n >= 256 && n <= 1024 && n % 64 === 0)) {
+        throw new Error('생성 개수 1~3장, 해상도 256~1024px(64px 단위), Batch Size 1을 사용해.');
       }
       for (let index = 0; index < snapshot.batchCount; index++) {
         const seed = nextSeed(snapshot.randomSeed, snapshot.seed, index);
         const jobId = crypto.randomUUID();
-        const onState = (text: string) => setProgress((index + 1) + '/' + snapshot.batchCount + ' · ' + text);
-        const generated = execution === 'browser'
-          ? {
-            jobId, promptId: 'browser-' + jobId, seed,
-            images: [{
-              blob: await runBrowserFluxKlein({
-                config: snapshot, seed, signal: controller.signal, onState,
-              }),
-              filename: 'browser-' + jobId + '.png',
-            }],
-          }
-          : await runComfyWorkflow({
-            endpoint: endpointSnapshot, workflow: selectedWorkflow!,
-            bindings: selectedBindings, model: selected, config: snapshot,
-            seed, jobId, signal: controller.signal, onState,
-          });
-        if (generated.jobId !== jobId) throw new Error('생성 결과의 작업 식별자가 일치하지 않아.');
-        const items: Output[] = [];
-        for (let outputIndex = 0; outputIndex < generated.images.length; outputIndex++) {
-          const generatedImage = generated.images[outputIndex];
-          const blob = await encodeOutput(generatedImage.blob, snapshot.outputFormat, snapshot.quality);
-          const filename = 'localvert-' + selected.id + '-' + jobId.slice(0, 8) +
-            '-' + (outputIndex + 1) + '.' + (snapshot.outputFormat === 'jpeg' ? 'jpg' : snapshot.outputFormat);
-          const metadata = snapshot.includeMetadata ? registerUrl(new Blob([JSON.stringify({
-            jobId, promptId: generated.promptId, modelId: selected.id,
-            engine: execution === 'browser' ? 'browser-webgpu' : 'comfyui',
-            checkpoint: execution === 'browser' ? 'cgb/flux2-klein-4b-onnx-webgpu' : availableResources,
-            seed, settings: snapshot,
-          }, null, 2)], { type: 'application/json' })) : undefined;
-          items.push({
-            id: jobId + '-' + outputIndex,
-            filename, url: registerUrl(blob),
-            promptId: generated.promptId, seed,
-            metadataUrl: metadata,
-          });
-        }
-        setOutput(previous => [...items, ...previous]);
+        const onState = (status: string) => setProgress((index + 1) + '/' + snapshot.batchCount + ' · ' + status);
+        const generatedBlob = await runBrowserModel({
+          modelId: modelIdSnapshot, config: snapshot, seed, signal: controller.signal, onState,
+        });
+        if (controller.signal.aborted) throw new DOMException('생성이 중단됐어.', 'AbortError');
+        const blob = await encodeOutput(generatedBlob, snapshot.outputFormat, snapshot.quality);
+        const filename = 'localvert-' + selected.id + '-' + jobId.slice(0, 8) +
+          '.' + (snapshot.outputFormat === 'jpeg' ? 'jpg' : snapshot.outputFormat);
+        const metadata = snapshot.includeMetadata ? registerUrl(new Blob([JSON.stringify({
+          jobId, promptId: 'browser-' + jobId, modelId: modelIdSnapshot,
+          engine: 'browser-webgpu', seed, settings: snapshot,
+        }, null, 2)], { type: 'application/json' })) : undefined;
+        const item: Output = {
+          id: jobId, filename, url: registerUrl(blob),
+          promptId: 'browser-' + jobId, seed, metadataUrl: metadata,
+        };
+        setOutput(previous => [item, ...previous]);
       }
       setProgress('생성 완료');
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : '이미지 생성에 실패했어.';
-      setError(message === 'Failed to fetch'
-        ? 'ComfyUI에 연결하지 못했어. 실행 상태와 --enable-cors-header 설정을 확인해.'
-        : message);
+      setError(cause instanceof Error ? cause.message : '이미지 생성에 실패했어.');
       setProgress('');
     } finally {
       controllerRef.current = null;
@@ -307,20 +185,6 @@ export default function ImageGeneratorPage() {
 
         <section className="gen-card gen-main" aria-label="이미지 생성 입력">
           <div className="gen-heading-row">
-            <h2>실행 환경</h2>
-            <span className="gen-muted">{execution === 'browser' ? '사용자 GPU · WebGPU' : 'ComfyUI · 로컬 API'}</span>
-          </div>
-          <div className="gen-level-switch" role="group" aria-label="이미지 생성 실행 환경">
-            <button type="button" aria-pressed={execution === 'browser'}
-              onClick={() => {
-                setExecution('browser');
-                setConfig(previous => ({ ...previous, batchSize: 1 }));
-                setError('');
-              }}>브라우저 WebGPU</button>
-            <button type="button" aria-pressed={execution === 'comfy'}
-              onClick={() => { setExecution('comfy'); setError(''); }}>ComfyUI</button>
-          </div>
-          <div className="gen-heading-row">
             <h2>생성 수준</h2>
             <span className="gen-muted">{model.name} · {model.params}</span>
           </div>
@@ -333,7 +197,7 @@ export default function ImageGeneratorPage() {
           <label className="gen-label" htmlFor="gen-model">모델</label>
           <select id="gen-model" className="gen-input" value={modelId}
             onChange={event => pickModel(event.target.value)}>
-            {modelsInLevel.map(item => <option key={item.id} value={item.id}>{item.name} · {item.use}</option>)}
+            {modelsInLevel.map(item => <option key={item.id} value={item.id}>{item.name} · {browserModelReady(item.id) ? item.use : '준비 중'}</option>)}
           </select>
           <div className="gen-model-note">
             <span>{model.use}</span>
@@ -358,19 +222,19 @@ export default function ImageGeneratorPage() {
           </div>
           <div className="gen-ratio-options" role="group" aria-label="해상도 프리셋">
             {([
-              ['1:1', execution === 'browser' ? 512 : 1024, execution === 'browser' ? 512 : 1024],
-              ['4:3', execution === 'browser' ? 768 : 1152, execution === 'browser' ? 576 : 864],
-              ['16:9', execution === 'browser' ? 1024 : 1344, execution === 'browser' ? 576 : 768],
-              ['9:16', execution === 'browser' ? 576 : 768, execution === 'browser' ? 1024 : 1344],
+              ['1:1', modelId === 'sana-sprint-06b' ? 1024 : 512, modelId === 'sana-sprint-06b' ? 1024 : 512],
+              ['4:3', 768, 576],
+              ['16:9', 1024, 576],
+              ['9:16', 576, 1024],
             ] as const).map(([label, w, h]) => (
               <button key={label} type="button" aria-pressed={config.width === w && config.height === h}
                 onClick={() => setRatio(w, h)}>{label}</button>
             ))}
           </div>
           <div className="gen-dimensions">
-            <label>가로(px)<input type="number" min={256} max={execution === 'browser' ? 1024 : 2048} step={64} className="gen-input"
+            <label>가로(px)<input type="number" min={256} max={1024} step={64} className="gen-input"
               value={config.width} onChange={event => setValue('width', Number(event.target.value))} /></label>
-            <label>세로(px)<input type="number" min={256} max={execution === 'browser' ? 1024 : 2048} step={64} className="gen-input"
+            <label>세로(px)<input type="number" min={256} max={1024} step={64} className="gen-input"
               value={config.height} onChange={event => setValue('height', Number(event.target.value))} /></label>
           </div>
 
@@ -401,22 +265,6 @@ export default function ImageGeneratorPage() {
                       onChange={event => setValue('steps', Number(event.target.value))} />}
                 {model.steps.min !== model.steps.max && <output>{config.steps}</output>}
               </div>
-              {model.cfg !== null && fieldExists(workflow || {}, bindings.cfg) && (
-                <label>Guidance Scale<input className="gen-input" type="number" step=".5" min={0} max={20}
-                  value={config.cfg} onChange={event => setValue('cfg', Number(event.target.value))} /></label>
-              )}
-              {fieldExists(workflow || {}, bindings.sampler) && !model.sampler && (
-                <label>Sampler<select className="gen-input" value={config.sampler}
-                  onChange={event => setValue('sampler', event.target.value)}>
-                    {['euler', 'euler_ancestral', 'dpmpp_2m', 'dpmpp_sde'].map(s => <option key={s} value={s}>{s}</option>)}
-                  </select></label>
-              )}
-              {fieldExists(workflow || {}, bindings.scheduler) && (
-                <label>Scheduler<select className="gen-input" value={config.scheduler}
-                  onChange={event => setValue('scheduler', event.target.value)}>
-                    {['normal', 'karras', 'simple', 'sgm_uniform'].map(s => <option key={s} value={s}>{s}</option>)}
-                  </select></label>
-              )}
               <label className="gen-check"><input type="checkbox" checked={config.randomSeed}
                 onChange={event => setValue('randomSeed', event.target.checked)} /> Random Seed</label>
               {!config.randomSeed && (
@@ -425,15 +273,6 @@ export default function ImageGeneratorPage() {
               )}
               <label>Batch Count<input className="gen-input" type="number" min={1} max={3}
                 value={config.batchCount} onChange={event => setValue('batchCount', Number(event.target.value))} /></label>
-              {execution === 'comfy' && fieldExists(workflow || {}, bindings.batch) && (
-                <label>Batch Size<input className="gen-input" type="number" min={1} max={4}
-                  value={config.batchSize} onChange={event => setValue('batchSize', Number(event.target.value))} /></label>
-              )}
-              {execution === 'comfy' && fieldExists(workflow || {}, bindings.loraStrength) && (
-                <label>LoRA Strength<input type="range" min={0} max={2} step={0.05}
-                  value={config.loraStrength} onChange={event => setValue('loraStrength', Number(event.target.value))} />
-                  <output>{config.loraStrength.toFixed(2)}</output></label>
-              )}
               <label>Output Format<select className="gen-input" value={config.outputFormat}
                 onChange={event => setValue('outputFormat', event.target.value as GenerationConfig['outputFormat'])}>
                   <option value="png">PNG</option><option value="webp">WebP</option><option value="jpeg">JPEG</option>
@@ -458,22 +297,14 @@ export default function ImageGeneratorPage() {
             {busy && <button type="button" className="lv-button lv-button-subtle"
               onClick={() => controllerRef.current?.abort()}>생성 중단</button>}
           </div>
-          {execution === 'comfy' && !workflow && <p className="gen-help">이미지를 생성하려면 아래에서 ComfyUI 워크플로를 연결해.</p>}
-          {execution === 'browser' && !browserModelAvailable && <p className="gen-help">
-            {model.name}의 브라우저 실행 엔진은 준비 중이야. Medium에서 FLUX.2 Klein 4B를 선택하면 WebGPU 시범 구동을 사용할 수 있어.
-          </p>}
-          {execution === 'comfy' && workflow && !modelMatched && <p className="gen-help" role="status">
-            선택 모델에 해당하는 체크포인트 파일명을 워크플로에서 찾지 못했어. 해당 모델의 API 워크플로를 가져와.
-          </p>}
-          {execution === 'comfy' && workflow && !promptBound && <p className="gen-help">프롬프트 입력 노드를 연결해야 해.</p>}
-          {execution === 'comfy' && workflow && requiredFields.length > 0 && <p className="gen-help">
-            워크플로 입력 연결에서 {requiredFields.join(' · ')} 필드를 지정해야 해.
+          {!browserModelAvailable && <p className="gen-help" role="status">
+            {browserModelStatus(model.id)}
           </p>}
           {busy || progress ? <p className="gen-progress" role="status">{progress}</p> : null}
           {error && <div className="gen-error" role="alert">{error}</div>}
         </section>
 
-        {execution === 'browser' && <section className="gen-card" aria-label="브라우저 생성 엔진">
+        <section className="gen-card" aria-label="브라우저 생성 엔진">
           <div className="gen-heading-row">
             <h2>브라우저 WebGPU 엔진</h2>
             <span className={'gen-state ' + (browserSupport?.available ? 'gen-state-ready' : 'gen-state-idle')}>
@@ -482,9 +313,11 @@ export default function ImageGeneratorPage() {
           </div>
           <p className="gen-muted gen-description">{browserSupport?.reason || '브라우저의 GPU를 확인하고 있어.'}</p>
           <p className="gen-help">
-            시범 모델: FLUX.2 Klein 4B. 최초 다운로드 약 6.5GB. 모델 파일은 Hugging Face에서 내려받고,
-            프롬프트·추론 연산은 사용자 브라우저에서 처리해. 고용량 GPU 메모리가 필요하며,
-            모델 가중치를 이용한 브라우저 실기 검증은 아직 완료되지 않았어.
+            {modelId === 'sana-sprint-06b'
+              ? 'SANA-Sprint 0.6B · 브라우저 WebGPU 실험 엔진. 모델 가중치는 외부에서 내려받으며 변환 모델의 실기 호환성 검증은 아직 완료되지 않았어.'
+              : modelId === 'flux2-klein-4b'
+                ? 'FLUX.2 Klein 4B · 최초 다운로드 약 6.5GB. 브라우저에서 직접 연산하며 실제 가중치 기반 생성은 검증 전이야.'
+                : '이 모델의 브라우저 추론 엔진은 준비되지 않았어.'}
           </p>
           <label className="gen-check">
             <input type="checkbox" checked={allowModelDownload}
@@ -492,70 +325,12 @@ export default function ImageGeneratorPage() {
             대용량 모델 다운로드 및 브라우저 저장소 사용에 동의
           </label>
           <p className="gen-help">
-            <a href="https://huggingface.co/cgb/flux2-klein-4b-onnx-webgpu"
+            <a href={modelId === 'sana-sprint-06b'
+              ? 'https://huggingface.co/Efficient-Large-Model/Sana_Sprint_0.6B_1024px_diffusers'
+              : 'https://huggingface.co/cgb/flux2-klein-4b-onnx-webgpu'}
               target="_blank" rel="noreferrer">ONNX 모델 및 라이선스 보기</a>
           </p>
-        </section>}
-        {execution === 'comfy' && <section className="gen-card" aria-labelledby="gen-connection">
-          <div className="gen-heading-row">
-            <h2 id="gen-connection">로컬 생성 엔진</h2>
-            <span className={'gen-state gen-state-' + connection}>
-              {connection === 'ready' ? '연결됨' : connection === 'checking' ? '확인 중' :
-                connection === 'error' ? '연결 실패' : '연결 전'}
-            </span>
-          </div>
-          <p className="gen-muted gen-description">
-            이 페이지는 모델을 서버에 설치하지 않아. 로컬 ComfyUI에서 모델이 설치된 API 워크플로를 연결하면 실제 이미지를 생성할 수 있어.
-          </p>
-          <div className="gen-connection-controls">
-            <label htmlFor="gen-endpoint">ComfyUI 주소</label>
-            <input id="gen-endpoint" className="gen-input" value={endpoint}
-              spellCheck={false} onChange={event => {
-                setEndpoint(event.target.value); setConnection('idle');
-              }} />
-            <button type="button" className="lv-button lv-button-subtle"
-              disabled={connection === 'checking'} onClick={checkConnection}>연결 확인</button>
-          </div>
-          <p className="gen-help">브라우저 연결을 위해 ComfyUI 서버를 CORS 허용 옵션으로 실행해야 할 수 있어.</p>
-          <input type="file" ref={fileRef} accept=".json,application/json" className="lv-visually-hidden"
-            aria-label="ComfyUI API 워크플로 JSON 업로드" onChange={loadWorkflow} />
-          <div className="gen-workflow-row">
-            <button type="button" className="lv-button lv-button-subtle"
-              onClick={() => fileRef.current?.click()}>API 워크플로 가져오기</button>
-            {workflowName && <span className="gen-muted">{workflowName}</span>}
-          </div>
-          {workflow && (
-            <>
-              <p className={modelMatched ? 'gen-workflow-ok' : 'gen-help'}>
-                {modelMatched ? '체크포인트 파일명 일치: ' + availableResources.join(', ') :
-                  '현재 선택 모델에 일치하는 체크포인트가 없어.'}
-              </p>
-              <details className="gen-details" open={showMapping}
-                onToggle={event => setShowMapping((event.currentTarget as HTMLDetailsElement).open)}>
-                <summary>워크플로 입력 연결</summary>
-                <div className="gen-options-grid">
-                  {BINDING_LABELS.filter(item => item.key !== 'negative' || model.negative).map(item => (
-                    <label key={item.key}>{item.label}
-                      <select className="gen-input"
-                        value={bindings[item.key] ? JSON.stringify(bindings[item.key]) : ''}
-                        onChange={event => changeBinding(item.key, event.target.value)}>
-                        <option value="">연결 없음</option>
-                        {fields.filter(field =>
-                          (['prompt', 'negative', 'sampler', 'scheduler', 'lora'].includes(item.key)
-                            ? typeof field.value === 'string'
-                            : typeof field.value === 'number')).map(field => (
-                          <option key={field.ref.nodeId + ':' + field.ref.field}
-                            value={JSON.stringify(field.ref)}>{field.label}</option>
-                        ))}
-                      </select>
-                    </label>
-                  ))}
-                </div>
-              </details>
-            </>
-          )}
-        </section>}
-
+        </section>
         <section className="gen-card" aria-labelledby="gen-output-title">
           <div className="gen-heading-row">
             <h2 id="gen-output-title">생성 결과</h2>
