@@ -5,7 +5,6 @@ import type { GenerationConfig } from './catalog';
 export type WebGpuSupport = {
   available: boolean;
   reason: string;
-  adapterName?: string;
   maxBufferBytes?: number;
 };
 
@@ -26,7 +25,6 @@ export async function probeImageWebGpu(): Promise<WebGpuSupport> {
     return {
       available: true,
       reason: 'WebGPU · shader-f16 사용 가능',
-      adapterName: adapter.info?.description,
       maxBufferBytes: adapter.limits.maxBufferSize,
     };
   } catch (error) {
@@ -45,7 +43,7 @@ function runStage(
   onProgress: (text: string) => void,
 ): Promise<StageResult> {
   return new Promise((resolve, reject) => {
-    const worker = new Worker(import.meta.env.BASE_URL + 'workers/flux2-stage.js', { type: 'module' });
+    const worker = new Worker(new URL('/workers/flux2-stage.js', location.origin), { type: 'module' });
     const requestId = crypto.randomUUID();
     let finished = false;
     function clean() {
