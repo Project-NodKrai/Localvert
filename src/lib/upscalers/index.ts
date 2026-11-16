@@ -1,4 +1,5 @@
 import Upscaler from 'upscaler';
+import type { UpscaleExecutionTrace } from './executionTrace';
 import * as tf from '@tensorflow/tfjs';
 import { setWasmPaths } from '@tensorflow/tfjs-backend-wasm';
 import { acquireFFmpeg, releaseFFmpeg } from '../converters/media';
@@ -71,7 +72,9 @@ export async function getUpscaler(selection: ImageUpscaleModel = 'esrgan-slim-2x
         const { default: medium4x } = await import('@upscalerjs/esrgan-medium/4x');
         return new Upscaler({ model: medium4x });
       }
-      // ESRGAN Slim 2x is the current UpscalerJS default model.
+      if (model !== 'esrgan-slim-2x') {
+        throw new Error('선택한 모델에 맞는 TensorFlow.js 복원 엔진이 없어.');
+      }
       return new Upscaler();
     })().catch((error) => {
       delete imageUpscalers[model];
@@ -81,26 +84,28 @@ export async function getUpscaler(selection: ImageUpscaleModel = 'esrgan-slim-2x
   return imageUpscalers[model];
 }
 
-export async function upscaleImage(file: File, model: ImageUpscaleModel, onProgress?: (p: number) => void): Promise<Blob> {
+export async function upscaleImage(file: File, model: ImageUpscaleModel, onProgress?: (p: number) => void,
+  trace?: UpscaleExecutionTrace): Promise<Blob> {
   const modelId = normalizeModelId(model);
-  if (isOnnxModelId(modelId)) return upscaleOnnxImage(file, modelId, onProgress);
-  if (isAnime4KModelId(modelId)) return upscaleAnime4K(file, modelId, onProgress);
+  if (isOnnxModelId(modelId)) return upscaleOnnxImage(file, modelId, onProgress, trace);
+  if (isAnime4KModelId(modelId)) return upscaleAnime4K(file, modelId, onProgress, trace);
   try {
-    return await upscaleImageInternal(file, model, onProgress);
+    return await upscaleImageInternal(file, model, onProgress, trace);
   } catch (e: any) {
     if (e?.message?.includes('shader') || e?.message?.includes('fragment') || e?.message?.includes('WebGL')) {
       console.warn('Shader error detected during image upscale. Retrying with WASM backend...');
       await tf.setBackend('wasm');
       await tf.ready();
       // Recreate the model on the fallback backend rather than retaining the failed instance.
-      delete imageUpscalers[normalizeModelId(model)];
-      return await upscaleImageInternal(file, model, onProgress);
+      for (const key of Object.keys(imageUpscalers) as ImageUpscaleModel[]) delete imageUpscalers[key];
+      return await upscaleImageInternal(file, model, onProgress, trace);
     }
     throw e;
   }
 }
 
-async function upscaleImageInternal(file: File, model: ImageUpscaleModel, onProgress?: (p: number) => void): Promise<Blob> {
+async function upscaleImageInternal(file: File, model: ImageUpscaleModel, onProgress?: (p: number) => void,
+  trace?: UpscaleExecutionTrace): Promise<Blob> {
   const upscaler = await getUpscaler(model);
 
   const img = new Image();
@@ -129,7 +134,14 @@ async function upscaleImageInternal(file: File, model: ImageUpscaleModel, onProg
     });
     
     const response = await fetch(result);
-    return await response.blob();
+    const output = await response.blob();
+    if (!output.size) throw new Error('AI 모델이 출력 이미지를 반환하지 않았어.');
+    const resolvedId = normalizeModelId(model);
+    const source = resolvedId === 'esrgan-medium-2x' ? '@upscalerjs/esrgan-medium/2x'
+      : resolvedId === 'esrgan-medium-4x' ? '@upscalerjs/esrgan-medium/4x'
+      : '@upscalerjs/esrgan-slim/2x';
+    trace?.recordInference(resolvedId, 'tfjs-' + tf.getBackend(), source);
+    return output;
   } finally {
     URL.revokeObjectURL(imageUrl);
   }
@@ -146,9 +158,10 @@ export async function upscaleVideo(
   limitSeconds: number | undefined,
   onProgress?: (percent: number) => void,
   model: ImageUpscaleModel = 'quicksrnet-small-4x',
+  trace?: UpscaleExecutionTrace,
 ): Promise<Blob> {
-  if (method === 'filter') return upscaleVideoFilter(id, file, onProgress);
-  return upscaleVideoAI(id, file, limitSeconds, model, onProgress);
+  if (method === 'filter') return upscaleVideoFilter(id, file, onProgress, trace);
+  return upscaleVideoAI(id, file, limitSeconds, model, onProgress, trace);
 }
 
 function safeVideoNames(id: string, file: File, prefix: string) {
@@ -166,6 +179,7 @@ async function upscaleVideoFilter(
   id: string,
   file: File,
   onProgress?: (percent: number) => void,
+  trace?: UpscaleExecutionTrace,
 ): Promise<Blob> {
   const instance = await acquireFFmpeg();
   const { inputName, outputName } = safeVideoNames(id, file, 'filter');
@@ -188,6 +202,7 @@ async function upscaleVideoFilter(
     if (typeof data === 'string' || !matchesMediaSignature(new Uint8Array(data), 'mp4')) {
       throw new Error('필터 결과물이 정상적인 MP4 파일이 아니야.');
     }
+    trace?.recordFilter();
     onProgress?.(100);
     return new Blob([new Uint8Array(data)], { type: 'video/mp4' });
   } finally {
@@ -204,6 +219,7 @@ async function upscaleVideoAI(
   limitSeconds: number | undefined,
   model: ImageUpscaleModel,
   onProgress?: (percent: number) => void,
+  trace?: UpscaleExecutionTrace,
 ): Promise<Blob> {
   // Do not quietly substitute the default model when a different one was chosen.
   validateVideoModel(model);
@@ -239,7 +255,8 @@ async function upscaleVideoAI(
       const input = new File([new Uint8Array(raw)], originalFrame, { type: 'image/png' });
       const upscale = await upscaleImage(input, model, (percentage) => {
         onProgress?.(Math.round(90 * (i + percentage / 100) / frameNames.length));
-      });
+      }, trace);
+      trace?.recordInferredFrame();
       const targetFrame = upscaledPrefix + originalFrame.slice(framePrefix.length);
       await instance.writeFile(targetFrame, new Uint8Array(await upscale.arrayBuffer()));
       await instance.deleteFile(originalFrame);
@@ -248,6 +265,7 @@ async function upscaleVideoAI(
     const args = videoFrameEncodeArgs(outputPattern, inputName, outputName, fps, frameNames.length);
     const encodeCode = await instance.exec(args);
     if (encodeCode !== 0) throw new Error('AI 복원 프레임을 MP4로 결합하지 못했어 (FFmpeg 코드 ' + encodeCode + ').');
+    trace?.recordEncodedFrames(frameNames.length);
     const result = await instance.readFile(outputName);
     if (typeof result === 'string' || !matchesMediaSignature(new Uint8Array(result), 'mp4')) {
       throw new Error('AI 복원 결과물이 정상적인 MP4 파일이 아니야.');

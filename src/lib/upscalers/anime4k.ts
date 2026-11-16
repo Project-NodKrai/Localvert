@@ -1,4 +1,5 @@
 import type { ActiveUpscaleModelId } from './catalog';
+import type { UpscaleExecutionTrace } from './executionTrace';
 
 export const ANIME4K_MODELS = [
   'anime4k-v4-s-2x', 'anime4k-v4-m-2x', 'anime4k-v4-l-2x',
@@ -13,6 +14,7 @@ export async function upscaleAnime4K(
   file: File,
   model: Anime4KModelId,
   onProgress?: (percent: number) => void,
+  trace?: UpscaleExecutionTrace,
 ): Promise<Blob> {
   // The MIT-licensed Anime4K.js 1.1.9 implementation bundles the 4.0.1 GLSL
   // shader weights. The app loads code from npm, not from a remote script CDN.
@@ -43,6 +45,7 @@ export async function upscaleAnime4K(
     if (!blob || blob.type !== 'image/png' || blob.size < 70) {
       throw new Error('Anime4K GPU가 유효한 PNG 결과를 반환하지 않았어.');
     }
+    trace?.recordInference(model, 'anime4k-webgl', 'anime4k.js@1.1.9/GLSL-4.0.1/' + model);
     onProgress?.(100);
     return blob;
   } finally {

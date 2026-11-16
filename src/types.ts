@@ -1,6 +1,7 @@
 export type FileType = 'video' | 'audio' | 'image' | 'document' | 'archive' | 'unknown';
 import type { CompressionSettings } from './lib/compressors/settings';
 import type { UpscaleModelSelection, UpscaleTier, UpscaleUse } from './lib/upscalers/catalog';
+import type { UpscaleExecutionEvidence } from './lib/upscalers/executionTrace';
 
 export type AppMode = 'convert' | 'compress' | 'upscale';
 
@@ -12,6 +13,7 @@ export interface BaseTask {
   progress: number;
   stored: boolean;
   resultBlob?: Blob;
+  resultEvidence?: UpscaleExecutionEvidence;
   resultUrl?: string;
   resultName?: string;
   resultSize?: number;

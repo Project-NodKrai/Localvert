@@ -1,4 +1,5 @@
 import JSZip from 'jszip';
+import type { UpscaleExecutionTrace } from './executionTrace';
 import {
   ONNX_MODEL_PROFILES, isOnnxModelId, tilePlan, validateTensorShape,
 } from './onnxProfiles';
@@ -32,6 +33,11 @@ type OrtRuntime = {
 
 let runtimePromise: Promise<OrtRuntime> | undefined;
 const sessions = new Map<OnnxModelId, Promise<OrtSession>>();
+const sessionIdentity = new WeakMap<OrtSession, {
+  modelId: OnnxModelId;
+  resource: string;
+  graphHash?: string;
+}>();
 
 async function getRuntime(): Promise<OrtRuntime> {
   if (!runtimePromise) {
@@ -72,8 +78,13 @@ async function sessionFor(id: OnnxModelId): Promise<OrtSession> {
   if (!pending) {
     pending = (async () => {
       const [ort, weights] = await Promise.all([getRuntime(), fetchModel(id)]);
-      const externalData = ONNX_MODEL_PROFILES[id].externalData;
-      return ort.InferenceSession.create(weights, {
+      const modelProfile = ONNX_MODEL_PROFILES[id];
+      const externalData = modelProfile.externalData;
+      const graphHash = weights.byteLength <= 32 * 1024 * 1024 && crypto?.subtle
+        ? Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', weights)),
+            byte => byte.toString(16).padStart(2, '0')).join('')
+        : undefined;
+      const session = await ort.InferenceSession.create(weights, {
         executionProviders: ['wasm'],
         graphOptimizationLevel: 'all',
         intraOpNumThreads: 1,
@@ -81,6 +92,8 @@ async function sessionFor(id: OnnxModelId): Promise<OrtSession> {
           externalData: [{ path: externalData, data: '/models/' + externalData }],
         } : {}),
       });
+      sessionIdentity.set(session, { modelId: id, resource: modelProfile.source, graphHash });
+      return session;
     })().catch(error => {
       sessions.delete(id);
       throw new Error(ONNX_MODEL_PROFILES[id].name + ' 모델 실행 준비 실패: ' + String(error));
@@ -179,6 +192,7 @@ async function createCanvasFromFile(file: File): Promise<HTMLCanvasElement> {
 
 export async function upscaleOnnxImage(
   file: File, modelId: string, onProgress?: (percent: number) => void,
+  trace?: UpscaleExecutionTrace,
 ): Promise<Blob> {
   if (!isOnnxModelId(modelId)) throw new Error('등록되지 않은 ONNX 복원 모델이야.');
   const profile = ONNX_MODEL_PROFILES[modelId];
@@ -197,6 +211,10 @@ export async function upscaleOnnxImage(
   if (!outputCtx) throw new Error('출력 캔버스를 생성할 수 없어.');
 
   const session = await sessionFor(modelId);
+  const identity = sessionIdentity.get(session);
+  if (!identity || identity.modelId !== modelId || identity.resource !== profile.source) {
+    throw new Error('실행 세션과 요청 모델 리소스의 연결을 검증할 수 없어.');
+  }
   const ort = await getRuntime();
   const tiles = tilePlan(width, height, modelId);
   for (let i = 0; i < tiles.length; i++) {
@@ -214,6 +232,7 @@ export async function upscaleOnnxImage(
       'outputHalo' in profile ? profile.outputHalo : 0,
     );
     outputCtx.putImageData(region, tile.x * profile.scale, tile.y * profile.scale);
+    trace?.recordInference(identity.modelId, 'onnx-wasm', identity.resource, identity.graphHash);
     prediction.dispose?.();
     tensor.dispose?.();
     onProgress?.(Math.round((i + 1) * 100 / tiles.length));
