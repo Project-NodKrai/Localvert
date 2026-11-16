@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LocalVert</title>
+    <script data-localvert-route-fallback>
+      (() => {
+        // Preserve path, query, and fragment. Pages cannot serve BrowserRouter
+        // routes directly, so redirect to index and restore the URL before boot.
+        const originalPath = window.location.pathname + window.location.search + window.location.hash;
+        window.location.replace('/?__localvert_path=' + encodeURIComponent(originalPath));
+      })();
+    </script>
+  </head>
+  <body>
+    <p>LocalVert 페이지로 이동 중이야. <a href="/">홈으로 이동</a></p>
+  </body>
+</html>
