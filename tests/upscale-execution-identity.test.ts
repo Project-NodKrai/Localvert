@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeUpscaleJobSnapshot, UpscaleExecutionTrace } from '../src/lib/upscalers/executionTrace';
+import { snapshotQueueTask, assertJobResultAssociation } from '../src/lib/taskQueue';
 
 function imageTask(model = 'esrgan-slim-2x') {
   return {
@@ -60,4 +61,21 @@ test('successful image evidence comes from the actual executed backend', async (
   assert.equal(evidence.effectiveModelId, 'esrgan-slim-2x');
   assert.equal(evidence.inferenceCalls, 1);
   assert.equal(evidence.cacheHit, false);
+});
+
+
+test('pending queue task object remains stable when UI updates the original', () => {
+  const task = imageTask();
+  const queued = snapshotQueueTask(task);
+  task.model = 'purephoto-span-4x';
+  assert.equal(queued.model, 'esrgan-slim-2x');
+  assert.ok(Object.isFrozen(queued));
+});
+
+test('download evidence cannot be associated with another job ID', () => {
+  assert.doesNotThrow(() => assertJobResultAssociation('job-one', undefined));
+  assert.doesNotThrow(() => assertJobResultAssociation('job-one',
+    { jobId: 'job-one' } as any));
+  assert.throws(() => assertJobResultAssociation('job-two',
+    { jobId: 'job-one' } as any), /작업 ID/);
 });

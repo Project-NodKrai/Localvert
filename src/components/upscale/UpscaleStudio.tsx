@@ -181,6 +181,10 @@ export default function UpscaleStudio({
                       )}
                       {task.status === 'done' && task.resultUrl && (
                         <a href={task.resultUrl} download={task.resultName}
+                          data-job-id={task.id}
+                          data-effective-model-id={task.resultEvidence?.effectiveModelId ?? 'none'}
+                          data-output-sha256={task.resultEvidence?.outputSha256 ?? ''}
+                          data-output-bytes={task.resultEvidence?.outputBytes ?? task.resultSize}
                           className="flex items-center gap-1 rounded-lg bg-[#E6F8EF] px-3 py-2 text-xs font-bold text-[#20865A]">
                           <Download size={15} /> 다운로드
                         </a>

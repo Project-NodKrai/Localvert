@@ -12,6 +12,18 @@ interface ProcessResult {
 
 type TaskProcessor<T extends Task> = (task: T, onProgress: (progress: number) => void) => Promise<ProcessResult>;
 
+export function snapshotQueueTask<T extends Task>(task: T): Readonly<T> {
+  // Freeze the top-level execution fields. Each task gets a separate identity,
+  // while source File objects remain immutable browser objects.
+  return Object.freeze({ ...task });
+}
+
+export function assertJobResultAssociation(id: string, evidence?: UpscaleExecutionEvidence): void {
+  if (evidence && evidence.jobId !== id) {
+    throw new Error('완료된 처리 결과의 작업 ID가 현재 작업과 달라.');
+  }
+}
+
 /**
  * Browsers expose only approximate device information. Use conservative limits
  * for large/decoded files rather than treating CPU threads as RAM capacity.
@@ -111,9 +123,7 @@ export function useTaskQueue<T extends Task>(
           const result = await processorRef.current(task, progress);
           if (!mountedRef.current || cancelledRef.current.has(id)) return;
 
-          if (result.evidence && result.evidence.jobId !== id) {
-            throw new Error('완료된 처리 결과의 작업 ID가 현재 작업과 달라.');
-          }
+          assertJobResultAssociation(id, result.evidence);
           const url = URL.createObjectURL(result.blob);
           if (!mountedRef.current || cancelledRef.current.has(id)) {
             URL.revokeObjectURL(url);
@@ -165,7 +175,7 @@ export function useTaskQueue<T extends Task>(
         accepted.push(id);
         pendingIds.add(id);
         // Freeze job-level selections at registration, not at GPU initialization.
-        immutableJobsRef.current.set(id, Object.freeze({ ...task }) as T);
+        immutableJobsRef.current.set(id, snapshotQueueTask(task) as T);
       }
     }
     if (!accepted.length) return;
