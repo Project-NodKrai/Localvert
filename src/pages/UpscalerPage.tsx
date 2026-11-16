@@ -13,6 +13,7 @@ import { adviseImageUpscale, detectDeviceHints } from '../lib/upscalers/performa
 import { activeModel, isRunnableSelection } from '../lib/upscalers/catalog';
 import { storeFile, removeStoredFile, getStoredFile } from '../lib/storage';
 import { useTaskQueue } from '../lib/taskQueue';
+import { snapshotQueueTask } from '../lib/queueIdentity';
 
 function getFileType(file: File): FileType {
   if (canAcceptStudioFile('video', file)) return 'video';
@@ -22,7 +23,7 @@ function getFileType(file: File): FileType {
 
 type UpscaleSnackbar =
   | { kind: 'notice'; messages: string[] }
-  | { kind: 'confirm'; messages: string[]; ids: string[] };
+  | { kind: 'confirm'; messages: string[]; jobs: readonly UpscaleTask[] };
 
 export default function UpscalerPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -118,6 +119,9 @@ export default function UpscalerPage() {
     }
     profilesRef.current = nextProfiles;
     setStudioProfiles(nextProfiles);
+    // The original Start-click snapshot must not be confirmed after a new
+    // model selection. Make the user start again with the newly chosen model.
+    setSnackbar(previous => previous?.kind === 'confirm' ? null : previous);
 
     // Changes apply only to idle uploads; queue and completed jobs are immutable.
     const affected = getCurrentTasks().filter(task =>
@@ -174,7 +178,7 @@ export default function UpscalerPage() {
     return { blob, evidence, resultName: `upscaled_${stem}.${ext}` };
   };
 
-  const { enqueue, cancelTask, updateUnqueuedTasks, getCurrentTasks } =
+  const { enqueue, enqueueSnapshots, cancelTask, updateUnqueuedTasks, getCurrentTasks } =
     useTaskQueue(tasks, setTasks, processTask);
 
   // Warnings are advisory. Even an underpowered device may process the image if
@@ -205,7 +209,7 @@ export default function UpscalerPage() {
       return;
     }
     if (warnings.length) {
-      setSnackbar({ kind: 'confirm', ids: chosen.map(task => task.id), messages: warnings });
+      setSnackbar({ kind: 'confirm', jobs: chosen.map(task => snapshotQueueTask(task as UpscaleTask)), messages: warnings });
     } else {
       setSnackbar(null);
       chosen.forEach(task => enqueue(task.id));
@@ -214,11 +218,9 @@ export default function UpscalerPage() {
 
   const confirmProcessing = () => {
     if (snackbar?.kind !== 'confirm') return;
-    const ids = snackbar.ids;
+    const jobs = snackbar.jobs;
     setSnackbar(null);
-    ids.forEach(id => {
-      if (getCurrentTasks().some(task => task.id === id && task.status === 'idle' && task.stored)) enqueue(id);
-    });
+    enqueueSnapshots(jobs);
   };
 
   const handleRunTask = (id: string) => requestProcessing([id]);

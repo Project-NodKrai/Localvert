@@ -113,7 +113,13 @@ export function useTaskQueue<T extends Task>(
           const result = await processorRef.current(task, progress);
           if (!mountedRef.current || cancelledRef.current.has(id)) return;
 
+          if (task.mode === 'upscale' && !result.evidence) {
+            throw new Error('AI 복원 결과의 모델 실행 기록을 확인할 수 없어.');
+          }
           assertJobResultAssociation(id, result.evidence);
+          if (result.evidence && result.evidence.outputBytes !== result.blob.size) {
+            throw new Error('완료된 작업의 출력 크기와 다운로드 Blob이 일치하지 않아.');
+          }
           const url = URL.createObjectURL(result.blob);
           if (!mountedRef.current || cancelledRef.current.has(id)) {
             URL.revokeObjectURL(url);
@@ -152,35 +158,50 @@ export function useTaskQueue<T extends Task>(
 
   pumpRef.current = pump;
 
-  const enqueueMany = useCallback((ids: string[]) => {
+  const enqueueJobs = useCallback((requested: readonly T[]) => {
     if (!mountedRef.current) return;
 
     const accepted: string[] = [];
     const pendingIds = new Set(pendingRef.current);
-    for (const id of ids) {
-      const task = tasksRef.current.find((t) => t.id === id);
-      if (task?.status === 'idle' && task.stored &&
-          !runningRef.current.has(id) && !pendingIds.has(id) &&
-          !cancelledRef.current.has(id)) {
-        accepted.push(id);
-        pendingIds.add(id);
-        // Freeze job-level selections at registration, not at GPU initialization.
-        immutableJobsRef.current.set(id, snapshotQueueTask(task) as T);
+    for (const submitted of requested) {
+      const current = tasksRef.current.find((t) => t.id === submitted.id);
+      // Match both task identity and original File object. The supplied
+      // settings can be an earlier confirmed snapshot, but must never be
+      // paired with a different upload that happens to share an ID.
+      if (current?.status === 'idle' && current.stored &&
+          current.file === submitted.file && current.mode === submitted.mode &&
+          !runningRef.current.has(current.id) && !pendingIds.has(current.id) &&
+          !cancelledRef.current.has(current.id)) {
+        accepted.push(current.id);
+        pendingIds.add(current.id);
+        immutableJobsRef.current.set(current.id, snapshotQueueTask(submitted) as T);
       }
     }
     if (!accepted.length) return;
 
     const acceptedIds = new Set(accepted);
-    tasksRef.current = tasksRef.current.map((t) =>
-      acceptedIds.has(t.id) ? ({ ...t, status: 'queued' } as T) : t
+    tasksRef.current = tasksRef.current.map((task) =>
+      acceptedIds.has(task.id) ? ({ ...task, status: 'queued' } as T) : task
     );
-    setTasks((prev) => prev.map((t) =>
-      acceptedIds.has(t.id) ? ({ ...t, status: 'queued' } as T) : t
+    setTasks((prev) => prev.map((task) =>
+      acceptedIds.has(task.id) ? ({ ...task, status: 'queued' } as T) : task
     ));
 
     pendingRef.current.push(...accepted);
     pumpRef.current();
   }, [setTasks]);
+
+  const enqueueMany = useCallback((ids: string[]) => {
+    const selected = ids.map(id => tasksRef.current.find(task => task.id === id))
+      .filter((task): task is T => task !== undefined);
+    enqueueJobs(selected);
+  }, [enqueueJobs]);
+
+  // Used after a warning confirmation: the selection is pinned at the first
+  // Start click, not silently looked up again when the confirmation is accepted.
+  const enqueueSnapshots = useCallback((snapshots: readonly T[]) => {
+    enqueueJobs(snapshots);
+  }, [enqueueJobs]);
 
   const updateUnqueuedTasks = useCallback((updater: (current: T[]) => T[]) => {
     // Updating the ref synchronously prevents a model-change + Start click
@@ -212,5 +233,5 @@ export function useTaskQueue<T extends Task>(
     };
   }, []);
 
-  return { enqueue, enqueueAll, cancelTask, updateUnqueuedTasks, getCurrentTasks };
+  return { enqueue, enqueueAll, enqueueSnapshots, cancelTask, updateUnqueuedTasks, getCurrentTasks };
 }
