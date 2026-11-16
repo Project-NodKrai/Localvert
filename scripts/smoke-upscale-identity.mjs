@@ -138,9 +138,11 @@ try {
   // for the SAME source+model are valid; distinct jobs still require distinct URLs.
   await slider.focus();
   await slider.press('Home');
+  const originalUrl = await page.locator('[data-upscale-studio] li').filter({ hasText: 'image-A.png' })
+    .locator('a[data-job-id]').getAttribute('href');
   const again = await runImageJob(page, bytes, 'image-A-again.png', 'quicksrnet-small-4x');
   if (again.jobId === evidence.image[0].jobId ||
-      again.href === evidence.image[0].href ||
+      again.href === originalUrl ||
       again.modelGraphSha256 !== evidence.image[0].modelGraphSha256 ||
       again.digest !== evidence.image[0].sha256) {
     throw new Error('Returning to a previous model reused a download or changed its ONNX graph');
@@ -152,7 +154,7 @@ try {
     originalSha256: evidence.image[0].sha256,
     revisitedSha256: again.digest,
     graphSha256: again.modelGraphSha256,
-    separateBlobUrls: again.href !== evidence.image[0].href,
+    separateBlobUrls: again.href !== originalUrl,
   };
   console.log('PASS A->B->C->A: model graph stable, job-specific Blob URLs independent');
   console.log('PASS image A->B->C actual ONNX inference, job-bound Blob URL and SHA256');
