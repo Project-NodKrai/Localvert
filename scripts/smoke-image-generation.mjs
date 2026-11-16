@@ -93,6 +93,7 @@ try {
     }
   });
   await page.getByRole('heading', { name: '이미지 생성' }).waitFor({ state: 'visible' });
+  await page.getByRole('group', { name: '이미지 생성 실행 환경' }).getByRole('button', { name: 'ComfyUI' }).click();
   await page.getByRole('group', { name: '이미지 생성 수준' }).getByRole('button', { name: 'Medium' }).click();
   await page.locator('#gen-model').selectOption('flux2-klein-4b');
   await page.locator('#gen-prompt').fill('A bright lunar observatory');
