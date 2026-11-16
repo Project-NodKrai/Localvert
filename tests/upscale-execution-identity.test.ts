@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeUpscaleJobSnapshot, UpscaleExecutionTrace } from '../src/lib/upscalers/executionTrace';
-import { snapshotQueueTask, assertJobResultAssociation } from '../src/lib/taskQueue';
+import { snapshotQueueTask, assertJobResultAssociation } from '../src/lib/queueIdentity';
 
 function imageTask(model = 'esrgan-slim-2x') {
   return {
