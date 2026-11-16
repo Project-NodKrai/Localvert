@@ -1,13 +1,13 @@
-name: Upscale model identity smoke
+name: Upscaler model and output identity
 
 on:
   pull_request:
     paths:
       - 'src/lib/upscalers/**'
       - 'src/lib/taskQueue.ts'
+      - 'src/lib/queueIdentity.ts'
       - 'src/pages/UpscalerPage.tsx'
       - 'src/components/upscale/**'
-      - 'src/types.ts'
       - 'scripts/smoke-upscale-identity.mjs'
       - '.github/workflows/upscale-identity-smoke.yml'
 
@@ -15,7 +15,7 @@ permissions:
   contents: read
 
 jobs:
-  model-identity:
+  identity:
     runs-on: ubuntu-latest
     container:
       image: mcr.microsoft.com/playwright:v1.57.0-noble
@@ -27,12 +27,19 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - name: Install ffprobe for actual video result verification
+      - name: Install FFmpeg and ffprobe for encoded frame verification
         run: apt-get update && apt-get install -y ffmpeg
       - run: npm ci
       - run: npm install --no-save --package-lock=false playwright@1.57.0
-      - name: Run A/B/C video and image inference and job-specific downloads in Chromium
+      - name: Run three real models through UI images and FFmpeg.wasm videos
         run: |
           npm run dev -- --host 127.0.0.1 > /tmp/localvert-identity.log 2>&1 &
           for i in $(seq 1 90); do curl -fsS http://127.0.0.1:3000/upscale >/dev/null && break || sleep 1; done
           node scripts/smoke-upscale-identity.mjs
+      - name: Upload independent job/model/hash evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: upscale-identity-evidence
+          path: identity-evidence.json
+          if-no-files-found: ignore
