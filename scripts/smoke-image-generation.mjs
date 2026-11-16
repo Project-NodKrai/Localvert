@@ -1,0 +1,155 @@
+import { chromium } from 'playwright';
+
+const workflow = {
+  '1': { class_type: 'CheckpointLoaderSimple', inputs: {
+    ckpt_name: 'flux2-klein-4b-fp8.safetensors',
+  } },
+  '2': { class_type: 'CLIPTextEncode', inputs: {
+    text: 'original prompt', clip: ['1', 1],
+  } },
+  '5': { class_type: 'CLIPTextEncode', inputs: {
+    text: 'original negative', clip: ['1', 1],
+  } },
+  '3': { class_type: 'KSampler', inputs: {
+    positive: ['2', 0], negative: ['5', 0],
+    seed: 42, steps: 80, cfg: 12, sampler_name: 'euler', scheduler: 'normal',
+  } },
+  '4': { class_type: 'EmptyLatentImage', inputs: {
+    width: 512, height: 512, batch_size: 1,
+  } },
+  '6': { class_type: 'SaveImage', inputs: {
+    images: ['3', 0], filename_prefix: 'Test',
+  } },
+};
+
+let browser;
+try {
+  browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
+  for (const width of [320, 390, 1440]) {
+    const page = await browser.newPage({ viewport: { width, height: width === 1440 ? 900 : 770 } });
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await page.goto('http://127.0.0.1:3000/generate', { waitUntil: 'domcontentloaded' });
+    await page.getByRole('heading', { name: '이미지 생성', exact: true }).waitFor({ state: 'visible', timeout: 25000 });
+    const group = page.getByRole('group', { name: '이미지 생성 수준' });
+    for (const item of ['Instant', 'Medium', 'High']) {
+      await group.getByRole('button', { name: item }).waitFor({ state: 'visible' });
+    }
+    const scrollbarWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+    if (scrollbarWidth > width + 1) {
+      throw new Error(width + 'px horizontal overflow ' + scrollbarWidth);
+    }
+    if (errors.length) throw new Error('Page errors at ' + width + ': ' + errors.join(' | '));
+    await page.close();
+  }
+
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const errors = [];
+  const submissions = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto('http://127.0.0.1:3000/generate', { waitUntil: 'domcontentloaded' });
+  const bytes = Buffer.from(await page.evaluate(async () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 20; canvas.height = 20;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#336bd1'; ctx.fillRect(0, 0, 20, 20);
+    const blob = await new Promise((resolve, reject) =>
+      canvas.toBlob(item => item ? resolve(item) : reject(new Error('PNG fixture failed')), 'image/png'));
+    return [...new Uint8Array(await blob.arrayBuffer())];
+  }));
+
+  await page.route('http://127.0.0.1:8188/**', async route => {
+    const req = route.request();
+    const url = new URL(req.url());
+    const headers = {
+      'access-control-allow-origin': '*',
+      'access-control-allow-methods': 'GET, POST, OPTIONS',
+      'access-control-allow-headers': 'content-type',
+    };
+    if (req.method() === 'OPTIONS') {
+      await route.fulfill({ status: 204, headers });
+    } else if (url.pathname === '/system_stats') {
+      await route.fulfill({ status: 200, headers: { ...headers, 'content-type': 'application/json' },
+        body: JSON.stringify({ system: { comfyui_version: 'test' } }) });
+    } else if (url.pathname === '/prompt' && req.method() === 'POST') {
+      const body = JSON.parse(req.postData() || '{}');
+      submissions.push(body);
+      await route.fulfill({ status: 200, headers: { ...headers, 'content-type': 'application/json' },
+        body: JSON.stringify({ prompt_id: 'prompt-' + submissions.length }) });
+    } else if (url.pathname.startsWith('/history/')) {
+      const promptId = url.pathname.split('/')[2];
+      await route.fulfill({ status: 200, headers: { ...headers, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          [promptId]: {
+            status: { status_str: 'success', completed: true },
+            outputs: { '6': { images: [{ filename: promptId + '.png', subfolder: '', type: 'output' }] } },
+          },
+        }) });
+    } else if (url.pathname === '/view') {
+      await route.fulfill({ status: 200, headers: { ...headers, 'content-type': 'image/png' },
+        body: bytes });
+    } else {
+      await route.fulfill({ status: 404, headers });
+    }
+  });
+  await page.getByRole('heading', { name: '이미지 생성' }).waitFor({ state: 'visible' });
+  await page.getByRole('group', { name: '이미지 생성 수준' }).getByRole('button', { name: 'Medium' }).click();
+  await page.locator('#gen-model').selectOption('flux2-klein-4b');
+  await page.locator('#gen-prompt').fill('A bright lunar observatory');
+  await page.getByRole('button', { name: '16:9' }).click();
+  const advanced = page.locator('details').filter({ has: page.locator('summary').getByText('생성 설정') });
+  await advanced.locator('summary').click();
+  await advanced.getByRole('checkbox', { name: 'Random Seed' }).uncheck();
+  await advanced.getByRole('spinbutton', { name: 'Seed' }).fill('123');
+  await page.locator('input[aria-label="ComfyUI API 워크플로 JSON 업로드"]').setInputFiles({
+    name: 'comfy-api.json', mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(workflow)),
+  });
+  await page.getByText(/체크포인트 파일명 일치/).waitFor({ state: 'visible' });
+  await page.getByRole('button', { name: '연결 확인' }).click();
+  await page.getByText('연결됨').waitFor({ state: 'visible' });
+  await page.getByRole('button', { name: '이미지 생성', exact: true }).click();
+  await page.getByText('생성 완료').waitFor({ state: 'visible', timeout: 18000 });
+  const result = page.locator('.gen-result');
+  await result.first().waitFor({ state: 'visible' });
+  if (!await result.first().locator('img').evaluate(img => img.complete && img.naturalWidth > 0)) {
+    throw new Error('Generated image is not decoded in the results gallery');
+  }
+  if (submissions.length !== 1) throw new Error('Expected one actual prompt submission, saw ' + submissions.length);
+  const first = submissions[0].prompt;
+  if (first['1'].inputs.ckpt_name !== 'flux2-klein-4b-fp8.safetensors' ||
+      first['2'].inputs.text !== 'A bright lunar observatory' ||
+      first['3'].inputs.seed !== 123 || first['3'].inputs.steps !== 4 ||
+      first['3'].inputs.cfg !== 1 ||
+      first['4'].inputs.width !== 1344 || first['4'].inputs.height !== 768) {
+    throw new Error('Mismatch between selected UI values and executed API workflow: ' + JSON.stringify(first));
+  }
+  await page.getByRole('button', { name: '이미지 생성', exact: true }).click();
+  await page.locator('.gen-result').nth(1).waitFor({ state: 'visible', timeout: 18000 });
+  if (submissions.length !== 2 || submissions[1].prompt['3'].inputs.seed !== 123) {
+    throw new Error('Second run reused a pending workflow or changed fixed seed');
+  }
+  const links = await page.locator('.gen-result a[download]').evaluateAll(anchors =>
+    anchors.map(anchor => anchor.getAttribute('href')));
+  if (new Set(links).size !== 2 || links.some(link => !link?.startsWith('blob:'))) {
+    throw new Error('Two completed jobs share a stale output Blob URL: ' + JSON.stringify(links));
+  }
+  const blobs = await page.locator('.gen-result a[download]').evaluateAll(async links => {
+    const hashes = [];
+    for (const link of links) {
+      const blob = await (await fetch(link.href)).blob();
+      const digest = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
+      hashes.push(Array.from(new Uint8Array(digest)).map(byte => byte.toString(16).padStart(2, '0')).join(''));
+    }
+    return hashes;
+  });
+  if (blobs.length !== 2 || blobs[0] !== blobs[1]) throw new Error('Result fixture hash mismatch');
+  await page.getByRole('group', { name: '이미지 생성 수준' }).getByRole('button', { name: 'High' }).click();
+  if (!await page.getByRole('button', { name: '이미지 생성', exact: true }).isDisabled()) {
+    throw new Error('Model mismatch was not blocked');
+  }
+  if (errors.length) throw new Error('Browser errors: ' + errors.join(' | '));
+  console.log('PASS 320/390/1440 responsive layout, Instant/Medium/High, local API workflow, seed/steps/cfg/dimensions, 2 independent job Blobs, mismatch blocking');
+} finally {
+  await browser?.close();
+}
